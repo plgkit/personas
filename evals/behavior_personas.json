@@ -1,0 +1,2459 @@
+{
+  "name": "behavior_personas",
+  "version": 1,
+  "example_count": 120,
+  "labels": [
+    "evaluator",
+    "implementer",
+    "champion",
+    "blocked",
+    "power_user",
+    "unknown"
+  ],
+  "rubric": "Label the behavior in the recent window. Do not treat the label as a permanent type of person. The same person can move from one label to another.\n\n`events` is chronological, oldest first. It is the recent activity that matters, not a full history. The other profile fields are the current state. Industry, job role, plan, account age, and session count are context. They do not assign the label by themselves.\n\nReturn exactly one of: evaluator, implementer, champion, blocked, power_user, unknown.\nReturn the label only, with no other text.\n\nEvent groups:\n\n- Inquiry: viewed_pricing, viewed_docs, viewed_feature_comparison, viewed_security_overview, viewed_case_study, started_sandbox, explored_sample_data, asked_fit_question, compared_export_formats, viewed_integration_catalog, bookmarked_integration.\n- Successful setup: completed_setup_step, connected_integration, imported_production_data, configured_roles, mapped_fields, configured_notifications, created_first_workflow, completed_setup, switched_to_production.\n- Advocacy: invited_department, sponsored_second_team, shared_workspace, created_internal_playbook, enabled_team_template, presented_to_leadership, requested_procurement_packet, requested_expansion_call, asked_it_to_approve_rollout.\n- Advanced use: used_api, used_webhook, created_automation, ran_bulk_action, used_advanced_filter, saved_advanced_view, scheduled_recurring_report, edited_workflow, resolved_queue, exported_production_data, customized_dashboard.\n- Product failure: sso_setup_failed, integration_auth_failed, import_failed, permission_denied, billing_verification_failed, hit_seat_limit.\n- Pending gate: admin_approval_pending, security_review_pending.\n\nOther events:\n\n- started_setup and started_sso_setup are attempts. They are not successful setup.\n- invited_teammate is a working-group invite. invited_reviewer is a fit-check invite. Neither is advocacy by itself.\n- opened_support_ticket and setup_abandoned record an obstacle. They are not successes.\n- signed_up, opened_welcome_email, password_reset, viewed_account_settings, and bounced_invoice_email are noise.\n\nA real inquiry is two different inquiry events totaling at least three events, or a sandbox or sample-data event plus a different inquiry event. Repeating one inquiry event is still one kind of inquiry.\n\nA repeated block is the same product failure at least twice, or a pending gate at least twice together with a support ticket, a permission denial, or an abandoned setup.\n\nDecision order. Stop at the first label that fits.\n\n1. blocked. A repeated block is present, and no successful setup event comes after the last product failure, pending gate, support ticket, or abandonment.\n2. Advocacy and advanced use both occur at least twice. Compare the last event of each group. If the last advocacy event is later, the label is champion. If the last advanced-use event is later and setup is complete, the label is power_user. If the last advanced-use event is later and setup is not complete, the label is unknown.\n3. champion. Advocacy events occur at least twice. A single pending gate does not stop this step. A repeated block was already handled by step 1.\n4. power_user. Setup is complete, and advanced-use events occur at least twice.\n5. implementer. Successful setup events occur at least twice.\n6. evaluator. Setup is not complete, and the window is a real inquiry. Invites, if any, are invited_reviewer only. There is no advocacy, no advanced use, no support ticket, no abandoned setup, and no pending gate. At most one product failure appears. The only successful setup event allowed is a single completed_setup_step, and only when a sandbox or sample-data event is also present.\n7. unknown. None of the labels above fit. This includes noise, an empty window, a glance that is not a real inquiry, and a setup that was opened and dropped with no successful step and no repeated block.\n\nOne event does not establish champion or power_user. One product failure does not establish blocked, even when it is the last event. One or two inquiry events, or the same inquiry event repeated, do not establish evaluator. The same product failure twice establishes blocked when no successful setup event comes after it, even if successful setup events came earlier. A repeated failure followed by a successful setup event is not blocked.",
+  "examples": [
+    {
+      "id": "evaluator_001",
+      "expected_persona": "evaluator",
+      "profile": {
+        "industry": "healthcare",
+        "job_role": "care_coordinator",
+        "plan": "trial",
+        "account_age_days": 6,
+        "sessions_last_7_days": 3,
+        "teammates_invited": 0,
+        "setup_completed": false,
+        "events": [
+          "viewed_pricing",
+          "viewed_docs",
+          "viewed_feature_comparison",
+          "started_sandbox",
+          "explored_sample_data"
+        ]
+      },
+      "reason": "Pricing, docs, a feature comparison, and sample data in the sandbox. Setup has not started."
+    },
+    {
+      "id": "evaluator_002",
+      "expected_persona": "evaluator",
+      "profile": {
+        "industry": "fintech",
+        "job_role": "compliance_manager",
+        "plan": "enterprise",
+        "account_age_days": 21,
+        "sessions_last_7_days": 7,
+        "teammates_invited": 1,
+        "setup_completed": false,
+        "events": [
+          "viewed_security_overview",
+          "viewed_docs",
+          "asked_fit_question",
+          "invited_reviewer",
+          "viewed_case_study",
+          "explored_sample_data"
+        ]
+      },
+      "reason": "Security reading, fit questions, a case study, and sample data, with one reviewer invited. Setup has not started."
+    },
+    {
+      "id": "evaluator_003",
+      "expected_persona": "evaluator",
+      "profile": {
+        "industry": "education",
+        "job_role": "instructional_designer",
+        "plan": "free",
+        "account_age_days": 3,
+        "sessions_last_7_days": 2,
+        "teammates_invited": 0,
+        "setup_completed": false,
+        "events": [
+          "viewed_docs",
+          "started_sandbox",
+          "explored_sample_data",
+          "asked_fit_question"
+        ]
+      },
+      "reason": "Docs, a sandbox, sample data, and a fit question. No successful setup event."
+    },
+    {
+      "id": "evaluator_004",
+      "expected_persona": "evaluator",
+      "profile": {
+        "industry": "logistics",
+        "job_role": "operations_analyst",
+        "plan": "team",
+        "account_age_days": 12,
+        "sessions_last_7_days": 9,
+        "teammates_invited": 0,
+        "setup_completed": false,
+        "events": [
+          "viewed_feature_comparison",
+          "viewed_pricing",
+          "viewed_docs",
+          "compared_export_formats",
+          "viewed_case_study",
+          "bookmarked_integration",
+          "explored_sample_data",
+          "viewed_pricing"
+        ]
+      },
+      "reason": "The window is comparisons, pricing, docs, a case study, a bookmarked integration, and sample data. Nothing has been configured."
+    },
+    {
+      "id": "evaluator_005",
+      "expected_persona": "evaluator",
+      "profile": {
+        "industry": "legal",
+        "job_role": "associate_attorney",
+        "plan": "trial",
+        "account_age_days": 4,
+        "sessions_last_7_days": 2,
+        "teammates_invited": 0,
+        "setup_completed": false,
+        "events": [
+          "viewed_docs",
+          "viewed_security_overview",
+          "asked_fit_question",
+          "viewed_pricing"
+        ]
+      },
+      "reason": "Docs, a security overview, a fit question, and pricing. Setup has not started."
+    },
+    {
+      "id": "evaluator_006",
+      "expected_persona": "evaluator",
+      "profile": {
+        "industry": "retail",
+        "job_role": "merchandiser",
+        "plan": "team",
+        "account_age_days": 9,
+        "sessions_last_7_days": 4,
+        "teammates_invited": 0,
+        "setup_completed": false,
+        "events": [
+          "viewed_integration_catalog",
+          "bookmarked_integration",
+          "explored_sample_data",
+          "asked_fit_question",
+          "viewed_docs"
+        ]
+      },
+      "reason": "The integration is browsed and bookmarked, not connected. The other events are sample data, a fit question, and docs."
+    },
+    {
+      "id": "evaluator_007",
+      "expected_persona": "evaluator",
+      "profile": {
+        "industry": "manufacturing",
+        "job_role": "process_engineer",
+        "plan": "trial",
+        "account_age_days": 15,
+        "sessions_last_7_days": 5,
+        "teammates_invited": 1,
+        "setup_completed": false,
+        "events": [
+          "viewed_case_study",
+          "viewed_docs",
+          "started_sandbox",
+          "invited_reviewer",
+          "explored_sample_data",
+          "viewed_feature_comparison"
+        ]
+      },
+      "reason": "A case study, docs, a sandbox, sample data, and a feature comparison, with one reviewer invited. No live setup."
+    },
+    {
+      "id": "evaluator_008",
+      "expected_persona": "evaluator",
+      "profile": {
+        "industry": "nonprofit",
+        "job_role": "program_coordinator",
+        "plan": "free",
+        "account_age_days": 2,
+        "sessions_last_7_days": 2,
+        "teammates_invited": 0,
+        "setup_completed": false,
+        "events": [
+          "viewed_pricing",
+          "viewed_case_study",
+          "asked_fit_question",
+          "viewed_docs"
+        ]
+      },
+      "reason": "Pricing, a case study, a fit question, and docs. Setup is not complete."
+    },
+    {
+      "id": "evaluator_009",
+      "expected_persona": "evaluator",
+      "profile": {
+        "industry": "insurance",
+        "job_role": "claims_analyst",
+        "plan": "business",
+        "account_age_days": 30,
+        "sessions_last_7_days": 6,
+        "teammates_invited": 0,
+        "setup_completed": false,
+        "events": [
+          "viewed_security_overview",
+          "viewed_docs",
+          "viewed_feature_comparison",
+          "asked_fit_question",
+          "compared_export_formats",
+          "explored_sample_data"
+        ]
+      },
+      "reason": "Security, docs, feature and export comparisons, a fit question, and sample data. Setup has not started."
+    },
+    {
+      "id": "evaluator_010",
+      "expected_persona": "evaluator",
+      "profile": {
+        "industry": "construction",
+        "job_role": "project_engineer",
+        "plan": "trial",
+        "account_age_days": 5,
+        "sessions_last_7_days": 3,
+        "teammates_invited": 0,
+        "setup_completed": false,
+        "events": [
+          "started_sandbox",
+          "explored_sample_data",
+          "completed_setup_step",
+          "explored_sample_data"
+        ]
+      },
+      "reason": "The only setup step sits between sample-data events in the sandbox. Setup is still incomplete, with no live integration or production import."
+    },
+    {
+      "id": "evaluator_011",
+      "expected_persona": "evaluator",
+      "profile": {
+        "industry": "media",
+        "job_role": "audience_editor",
+        "plan": "free",
+        "account_age_days": 7,
+        "sessions_last_7_days": 3,
+        "teammates_invited": 0,
+        "setup_completed": false,
+        "events": [
+          "viewed_feature_comparison",
+          "viewed_pricing",
+          "started_sandbox",
+          "viewed_docs"
+        ]
+      },
+      "reason": "A feature comparison, pricing, a sandbox, and docs. No successful setup event."
+    },
+    {
+      "id": "evaluator_012",
+      "expected_persona": "evaluator",
+      "profile": {
+        "industry": "energy",
+        "job_role": "grid_analyst",
+        "plan": "enterprise",
+        "account_age_days": 45,
+        "sessions_last_7_days": 4,
+        "teammates_invited": 1,
+        "setup_completed": false,
+        "events": [
+          "viewed_security_overview",
+          "invited_reviewer",
+          "asked_fit_question",
+          "viewed_docs",
+          "viewed_case_study"
+        ]
+      },
+      "reason": "A security overview, a fit question, docs, and a case study, with one reviewer invited. Setup has not started."
+    },
+    {
+      "id": "evaluator_013",
+      "expected_persona": "evaluator",
+      "profile": {
+        "industry": "hospitality",
+        "job_role": "revenue_manager",
+        "plan": "team",
+        "account_age_days": 8,
+        "sessions_last_7_days": 4,
+        "teammates_invited": 0,
+        "setup_completed": false,
+        "events": [
+          "viewed_pricing",
+          "compared_export_formats",
+          "explored_sample_data",
+          "viewed_docs",
+          "bookmarked_integration"
+        ]
+      },
+      "reason": "Pricing, export formats, sample data, docs, and a bookmarked integration. The integration was not connected."
+    },
+    {
+      "id": "evaluator_014",
+      "expected_persona": "evaluator",
+      "profile": {
+        "industry": "agriculture",
+        "job_role": "coop_manager",
+        "plan": "free",
+        "account_age_days": 11,
+        "sessions_last_7_days": 3,
+        "teammates_invited": 0,
+        "setup_completed": false,
+        "events": [
+          "viewed_case_study",
+          "viewed_pricing",
+          "asked_fit_question",
+          "started_sandbox"
+        ]
+      },
+      "reason": "A case study, pricing, a fit question, and a sandbox. No successful setup step."
+    },
+    {
+      "id": "evaluator_015",
+      "expected_persona": "evaluator",
+      "profile": {
+        "industry": "government",
+        "job_role": "procurement_analyst",
+        "plan": "enterprise",
+        "account_age_days": 18,
+        "sessions_last_7_days": 5,
+        "teammates_invited": 0,
+        "setup_completed": false,
+        "events": [
+          "viewed_security_overview",
+          "viewed_pricing",
+          "viewed_docs",
+          "asked_fit_question",
+          "viewed_feature_comparison"
+        ]
+      },
+      "reason": "A security overview, pricing, docs, a fit question, and a feature comparison. No invites and no setup."
+    },
+    {
+      "id": "evaluator_016",
+      "expected_persona": "evaluator",
+      "profile": {
+        "industry": "saas",
+        "job_role": "product_manager",
+        "plan": "business",
+        "account_age_days": 4,
+        "sessions_last_7_days": 3,
+        "teammates_invited": 0,
+        "setup_completed": false,
+        "events": [
+          "viewed_docs",
+          "viewed_feature_comparison",
+          "integration_auth_failed",
+          "explored_sample_data",
+          "viewed_integration_catalog"
+        ]
+      },
+      "reason": "Integration auth fails once, with no ticket and no retry. The other events are docs, a comparison, sample data, and the catalog."
+    },
+    {
+      "id": "evaluator_017",
+      "expected_persona": "evaluator",
+      "profile": {
+        "industry": "consulting",
+        "job_role": "engagement_manager",
+        "plan": "trial",
+        "account_age_days": 6,
+        "sessions_last_7_days": 2,
+        "teammates_invited": 1,
+        "setup_completed": false,
+        "events": [
+          "invited_reviewer",
+          "viewed_docs",
+          "started_sandbox",
+          "explored_sample_data"
+        ]
+      },
+      "reason": "One reviewer is invited into a sandbox with docs and sample data. There is no working-group invite and no live setup."
+    },
+    {
+      "id": "evaluator_018",
+      "expected_persona": "evaluator",
+      "profile": {
+        "industry": "biotech",
+        "job_role": "lab_ops_lead",
+        "plan": "enterprise",
+        "account_age_days": 14,
+        "sessions_last_7_days": 4,
+        "teammates_invited": 0,
+        "setup_completed": false,
+        "events": [
+          "viewed_security_overview",
+          "viewed_docs",
+          "asked_fit_question",
+          "viewed_case_study",
+          "compared_export_formats"
+        ]
+      },
+      "reason": "A security overview, docs, a fit question, a case study, and an export comparison. Setup has not started."
+    },
+    {
+      "id": "evaluator_019",
+      "expected_persona": "evaluator",
+      "profile": {
+        "industry": "real_estate",
+        "job_role": "brokerage_ops",
+        "plan": "team",
+        "account_age_days": 10,
+        "sessions_last_7_days": 5,
+        "teammates_invited": 0,
+        "setup_completed": false,
+        "events": [
+          "viewed_pricing",
+          "viewed_docs",
+          "started_sandbox",
+          "explored_sample_data",
+          "viewed_feature_comparison",
+          "viewed_case_study"
+        ]
+      },
+      "reason": "Pricing, docs, a sandbox, sample data, a feature comparison, and a case study. No configuration."
+    },
+    {
+      "id": "evaluator_020",
+      "expected_persona": "evaluator",
+      "profile": {
+        "industry": "staffing",
+        "job_role": "recruiting_lead",
+        "plan": "trial",
+        "account_age_days": 3,
+        "sessions_last_7_days": 2,
+        "teammates_invited": 0,
+        "setup_completed": false,
+        "events": [
+          "viewed_feature_comparison",
+          "asked_fit_question",
+          "viewed_pricing",
+          "explored_sample_data"
+        ]
+      },
+      "reason": "A feature comparison, a fit question, pricing, and sample data. Setup has not started."
+    },
+    {
+      "id": "implementer_001",
+      "expected_persona": "implementer",
+      "profile": {
+        "industry": "healthcare",
+        "job_role": "clinic_admin",
+        "plan": "team",
+        "account_age_days": 9,
+        "sessions_last_7_days": 5,
+        "teammates_invited": 2,
+        "setup_completed": false,
+        "events": [
+          "viewed_docs",
+          "started_setup",
+          "completed_setup_step",
+          "configured_roles",
+          "invited_teammate",
+          "invited_teammate"
+        ]
+      },
+      "reason": "Docs come first. Later events complete a setup step, configure roles, and invite two teammates."
+    },
+    {
+      "id": "implementer_002",
+      "expected_persona": "implementer",
+      "profile": {
+        "industry": "fintech",
+        "job_role": "payments_ops",
+        "plan": "business",
+        "account_age_days": 16,
+        "sessions_last_7_days": 6,
+        "teammates_invited": 0,
+        "setup_completed": true,
+        "events": [
+          "started_setup",
+          "connected_integration",
+          "mapped_fields",
+          "imported_production_data",
+          "configured_notifications",
+          "completed_setup"
+        ]
+      },
+      "reason": "A live integration, field mapping, a production import, notifications, and completed setup. No advanced-use events."
+    },
+    {
+      "id": "implementer_003",
+      "expected_persona": "implementer",
+      "profile": {
+        "industry": "education",
+        "job_role": "registrar",
+        "plan": "team",
+        "account_age_days": 7,
+        "sessions_last_7_days": 4,
+        "teammates_invited": 3,
+        "setup_completed": false,
+        "events": [
+          "started_setup",
+          "completed_setup_step",
+          "configured_roles",
+          "invited_teammate",
+          "invited_teammate",
+          "invited_teammate",
+          "mapped_fields"
+        ]
+      },
+      "reason": "Three teammate invites sit with a setup step, role configuration, and field mapping. There is no department invite, playbook, or template."
+    },
+    {
+      "id": "implementer_004",
+      "expected_persona": "implementer",
+      "profile": {
+        "industry": "logistics",
+        "job_role": "warehouse_lead",
+        "plan": "trial",
+        "account_age_days": 5,
+        "sessions_last_7_days": 4,
+        "teammates_invited": 0,
+        "setup_completed": false,
+        "events": [
+          "started_setup",
+          "import_failed",
+          "imported_production_data",
+          "mapped_fields",
+          "completed_setup_step"
+        ]
+      },
+      "reason": "The import fails once. Later events import production data, map fields, and complete a setup step."
+    },
+    {
+      "id": "implementer_005",
+      "expected_persona": "implementer",
+      "profile": {
+        "industry": "legal",
+        "job_role": "knowledge_manager",
+        "plan": "business",
+        "account_age_days": 20,
+        "sessions_last_7_days": 5,
+        "teammates_invited": 1,
+        "setup_completed": true,
+        "events": [
+          "connected_integration",
+          "configured_roles",
+          "invited_teammate",
+          "created_first_workflow",
+          "completed_setup"
+        ]
+      },
+      "reason": "A connection, roles, one teammate, the first workflow, and completed setup. No advanced-use events follow."
+    },
+    {
+      "id": "implementer_006",
+      "expected_persona": "implementer",
+      "profile": {
+        "industry": "retail",
+        "job_role": "store_systems_lead",
+        "plan": "team",
+        "account_age_days": 11,
+        "sessions_last_7_days": 4,
+        "teammates_invited": 1,
+        "setup_completed": false,
+        "events": [
+          "viewed_integration_catalog",
+          "started_setup",
+          "connected_integration",
+          "configured_notifications",
+          "invited_teammate"
+        ]
+      },
+      "reason": "Catalog browsing is followed by a live connection, notifications, and one teammate invite."
+    },
+    {
+      "id": "implementer_007",
+      "expected_persona": "implementer",
+      "profile": {
+        "industry": "manufacturing",
+        "job_role": "quality_supervisor",
+        "plan": "business",
+        "account_age_days": 13,
+        "sessions_last_7_days": 5,
+        "teammates_invited": 2,
+        "setup_completed": false,
+        "events": [
+          "started_setup",
+          "completed_setup_step",
+          "mapped_fields",
+          "imported_production_data",
+          "configured_roles",
+          "invited_teammate",
+          "invited_teammate"
+        ]
+      },
+      "reason": "A setup step, field mapping, a production import, and roles, with two teammates invited. Nothing fails."
+    },
+    {
+      "id": "implementer_008",
+      "expected_persona": "implementer",
+      "profile": {
+        "industry": "nonprofit",
+        "job_role": "data_coordinator",
+        "plan": "free",
+        "account_age_days": 8,
+        "sessions_last_7_days": 3,
+        "teammates_invited": 0,
+        "setup_completed": false,
+        "events": [
+          "started_setup",
+          "completed_setup_step",
+          "mapped_fields",
+          "created_first_workflow"
+        ]
+      },
+      "reason": "A setup step, field mapping, and the first workflow. No invites and no advanced use."
+    },
+    {
+      "id": "implementer_009",
+      "expected_persona": "implementer",
+      "profile": {
+        "industry": "insurance",
+        "job_role": "implementation_analyst",
+        "plan": "enterprise",
+        "account_age_days": 25,
+        "sessions_last_7_days": 6,
+        "teammates_invited": 4,
+        "setup_completed": false,
+        "events": [
+          "started_setup",
+          "configured_roles",
+          "invited_teammate",
+          "invited_teammate",
+          "invited_teammate",
+          "invited_teammate",
+          "connected_integration",
+          "mapped_fields"
+        ]
+      },
+      "reason": "Four teammate invites are paired with roles, a live integration, and field mapping. No department, playbook, template, or expansion event."
+    },
+    {
+      "id": "implementer_010",
+      "expected_persona": "implementer",
+      "profile": {
+        "industry": "construction",
+        "job_role": "project_coordinator",
+        "plan": "trial",
+        "account_age_days": 6,
+        "sessions_last_7_days": 3,
+        "teammates_invited": 1,
+        "setup_completed": false,
+        "events": [
+          "started_setup",
+          "completed_setup_step",
+          "invited_teammate",
+          "configured_notifications"
+        ]
+      },
+      "reason": "A completed setup step, one teammate, and notifications. Nothing fails, and setup is not marked complete yet."
+    },
+    {
+      "id": "implementer_011",
+      "expected_persona": "implementer",
+      "profile": {
+        "industry": "media",
+        "job_role": "distribution_ops",
+        "plan": "team",
+        "account_age_days": 4,
+        "sessions_last_7_days": 4,
+        "teammates_invited": 0,
+        "setup_completed": false,
+        "events": [
+          "started_setup",
+          "integration_auth_failed",
+          "integration_auth_failed",
+          "connected_integration",
+          "mapped_fields",
+          "configured_notifications"
+        ]
+      },
+      "reason": "Auth fails twice, then the integration connects and they map fields and set notifications."
+    },
+    {
+      "id": "implementer_012",
+      "expected_persona": "implementer",
+      "profile": {
+        "industry": "energy",
+        "job_role": "asset_scheduler",
+        "plan": "business",
+        "account_age_days": 18,
+        "sessions_last_7_days": 5,
+        "teammates_invited": 2,
+        "setup_completed": true,
+        "events": [
+          "imported_production_data",
+          "configured_roles",
+          "invited_teammate",
+          "invited_teammate",
+          "created_first_workflow",
+          "completed_setup",
+          "switched_to_production"
+        ]
+      },
+      "reason": "Production data, roles, two teammates, the first workflow, completed setup, and a switch to production. No advanced-use events."
+    },
+    {
+      "id": "implementer_013",
+      "expected_persona": "implementer",
+      "profile": {
+        "industry": "hospitality",
+        "job_role": "front_office_manager",
+        "plan": "team",
+        "account_age_days": 9,
+        "sessions_last_7_days": 4,
+        "teammates_invited": 2,
+        "setup_completed": false,
+        "events": [
+          "started_setup",
+          "configured_roles",
+          "invited_teammate",
+          "invited_teammate",
+          "configured_notifications",
+          "completed_setup_step"
+        ]
+      },
+      "reason": "Roles, two teammates, notifications, and a setup step. No advocacy events."
+    },
+    {
+      "id": "implementer_014",
+      "expected_persona": "implementer",
+      "profile": {
+        "industry": "agriculture",
+        "job_role": "elevator_operator",
+        "plan": "free",
+        "account_age_days": 12,
+        "sessions_last_7_days": 3,
+        "teammates_invited": 0,
+        "setup_completed": false,
+        "events": [
+          "viewed_docs",
+          "started_setup",
+          "mapped_fields",
+          "imported_production_data"
+        ]
+      },
+      "reason": "Docs come first. The later events map fields and import production data."
+    },
+    {
+      "id": "implementer_015",
+      "expected_persona": "implementer",
+      "profile": {
+        "industry": "government",
+        "job_role": "it_specialist",
+        "plan": "enterprise",
+        "account_age_days": 40,
+        "sessions_last_7_days": 4,
+        "teammates_invited": 1,
+        "setup_completed": false,
+        "events": [
+          "started_setup",
+          "completed_setup_step",
+          "configured_roles",
+          "connected_integration",
+          "invited_teammate"
+        ]
+      },
+      "reason": "A setup step, roles, a live integration, and one teammate. No failure and no advanced use."
+    },
+    {
+      "id": "implementer_016",
+      "expected_persona": "implementer",
+      "profile": {
+        "industry": "saas",
+        "job_role": "support_ops",
+        "plan": "business",
+        "account_age_days": 14,
+        "sessions_last_7_days": 11,
+        "teammates_invited": 3,
+        "setup_completed": true,
+        "events": [
+          "connected_integration",
+          "imported_production_data",
+          "configured_roles",
+          "invited_teammate",
+          "invited_teammate",
+          "invited_teammate",
+          "created_first_workflow",
+          "completed_setup"
+        ]
+      },
+      "reason": "A connection, a production import, roles, three teammates, the first workflow, and completed setup. No advanced-use events."
+    },
+    {
+      "id": "implementer_017",
+      "expected_persona": "implementer",
+      "profile": {
+        "industry": "consulting",
+        "job_role": "research_analyst",
+        "plan": "trial",
+        "account_age_days": 3,
+        "sessions_last_7_days": 3,
+        "teammates_invited": 0,
+        "setup_completed": false,
+        "events": [
+          "started_setup",
+          "completed_setup_step",
+          "mapped_fields",
+          "configured_notifications",
+          "integration_auth_failed"
+        ]
+      },
+      "reason": "A setup step, field mapping, and notifications are done. Integration auth fails once at the end and is not repeated."
+    },
+    {
+      "id": "implementer_018",
+      "expected_persona": "implementer",
+      "profile": {
+        "industry": "biotech",
+        "job_role": "clinical_data_manager",
+        "plan": "enterprise",
+        "account_age_days": 22,
+        "sessions_last_7_days": 5,
+        "teammates_invited": 1,
+        "setup_completed": false,
+        "events": [
+          "started_setup",
+          "configured_roles",
+          "connected_integration",
+          "mapped_fields",
+          "imported_production_data",
+          "invited_teammate"
+        ]
+      },
+      "reason": "Roles, a live integration, field mapping, and a production import, with one teammate. No failure and no advanced use."
+    },
+    {
+      "id": "implementer_019",
+      "expected_persona": "implementer",
+      "profile": {
+        "industry": "real_estate",
+        "job_role": "transaction_coordinator",
+        "plan": "team",
+        "account_age_days": 10,
+        "sessions_last_7_days": 4,
+        "teammates_invited": 1,
+        "setup_completed": true,
+        "events": [
+          "started_setup",
+          "connected_integration",
+          "created_first_workflow",
+          "invited_teammate",
+          "completed_setup"
+        ]
+      },
+      "reason": "A live connection, the first workflow, one teammate, and completed setup. No advanced-use events."
+    },
+    {
+      "id": "implementer_020",
+      "expected_persona": "implementer",
+      "profile": {
+        "industry": "staffing",
+        "job_role": "recruiting_coordinator",
+        "plan": "trial",
+        "account_age_days": 7,
+        "sessions_last_7_days": 4,
+        "teammates_invited": 2,
+        "setup_completed": false,
+        "events": [
+          "started_setup",
+          "imported_production_data",
+          "configured_roles",
+          "invited_teammate",
+          "invited_teammate",
+          "completed_setup_step"
+        ]
+      },
+      "reason": "A production import, roles, two teammates, and a setup step. No failure and no advocacy."
+    },
+    {
+      "id": "champion_001",
+      "expected_persona": "champion",
+      "profile": {
+        "industry": "healthcare",
+        "job_role": "medical_director",
+        "plan": "business",
+        "account_age_days": 60,
+        "sessions_last_7_days": 5,
+        "teammates_invited": 14,
+        "setup_completed": true,
+        "events": [
+          "shared_workspace",
+          "invited_department",
+          "created_internal_playbook",
+          "presented_to_leadership"
+        ]
+      },
+      "reason": "A shared workspace, a department invite, an internal playbook, and a leadership presentation. No advanced-use events."
+    },
+    {
+      "id": "champion_002",
+      "expected_persona": "champion",
+      "profile": {
+        "industry": "fintech",
+        "job_role": "revenue_operations_lead",
+        "plan": "business",
+        "account_age_days": 40,
+        "sessions_last_7_days": 8,
+        "teammates_invited": 9,
+        "setup_completed": true,
+        "events": [
+          "used_api",
+          "created_automation",
+          "invited_department",
+          "requested_expansion_call",
+          "sponsored_second_team"
+        ]
+      },
+      "reason": "API use and an automation come first. The later events invite a department, request an expansion call, and sponsor a second team."
+    },
+    {
+      "id": "champion_003",
+      "expected_persona": "champion",
+      "profile": {
+        "industry": "education",
+        "job_role": "department_chair",
+        "plan": "team",
+        "account_age_days": 35,
+        "sessions_last_7_days": 4,
+        "teammates_invited": 11,
+        "setup_completed": true,
+        "events": [
+          "enabled_team_template",
+          "invited_department",
+          "shared_workspace",
+          "created_internal_playbook"
+        ]
+      },
+      "reason": "A team template, a department invite, a shared workspace, and a playbook."
+    },
+    {
+      "id": "champion_004",
+      "expected_persona": "champion",
+      "profile": {
+        "industry": "logistics",
+        "job_role": "regional_manager",
+        "plan": "business",
+        "account_age_days": 50,
+        "sessions_last_7_days": 3,
+        "teammates_invited": 8,
+        "setup_completed": true,
+        "events": [
+          "presented_to_leadership",
+          "requested_procurement_packet",
+          "invited_department"
+        ]
+      },
+      "reason": "A leadership presentation, a procurement packet, and a department invite."
+    },
+    {
+      "id": "champion_005",
+      "expected_persona": "champion",
+      "profile": {
+        "industry": "legal",
+        "job_role": "managing_partner",
+        "plan": "enterprise",
+        "account_age_days": 70,
+        "sessions_last_7_days": 4,
+        "teammates_invited": 6,
+        "setup_completed": true,
+        "events": [
+          "requested_procurement_packet",
+          "presented_to_leadership",
+          "invited_department",
+          "shared_workspace"
+        ]
+      },
+      "reason": "A procurement packet, a leadership presentation, a department invite, and a shared workspace."
+    },
+    {
+      "id": "champion_006",
+      "expected_persona": "champion",
+      "profile": {
+        "industry": "retail",
+        "job_role": "district_manager",
+        "plan": "team",
+        "account_age_days": 28,
+        "sessions_last_7_days": 6,
+        "teammates_invited": 15,
+        "setup_completed": true,
+        "events": [
+          "invited_department",
+          "sponsored_second_team",
+          "enabled_team_template",
+          "shared_workspace"
+        ]
+      },
+      "reason": "A department invite, a second team, a team template, and a shared workspace."
+    },
+    {
+      "id": "champion_007",
+      "expected_persona": "champion",
+      "profile": {
+        "industry": "manufacturing",
+        "job_role": "plant_manager",
+        "plan": "business",
+        "account_age_days": 45,
+        "sessions_last_7_days": 4,
+        "teammates_invited": 10,
+        "setup_completed": false,
+        "events": [
+          "invited_department",
+          "presented_to_leadership",
+          "requested_procurement_packet",
+          "asked_it_to_approve_rollout"
+        ]
+      },
+      "reason": "Setup is not complete. The window is a department invite, a leadership presentation, a procurement packet, and an ask for IT to approve a wider rollout. There is no repeated failure."
+    },
+    {
+      "id": "champion_008",
+      "expected_persona": "champion",
+      "profile": {
+        "industry": "nonprofit",
+        "job_role": "development_director",
+        "plan": "free",
+        "account_age_days": 33,
+        "sessions_last_7_days": 5,
+        "teammates_invited": 7,
+        "setup_completed": true,
+        "events": [
+          "shared_workspace",
+          "sponsored_second_team",
+          "created_internal_playbook",
+          "asked_it_to_approve_rollout"
+        ]
+      },
+      "reason": "A shared workspace, a second team, a playbook, and an ask for IT to approve a wider rollout."
+    },
+    {
+      "id": "champion_009",
+      "expected_persona": "champion",
+      "profile": {
+        "industry": "insurance",
+        "job_role": "field_sales_manager",
+        "plan": "business",
+        "account_age_days": 55,
+        "sessions_last_7_days": 7,
+        "teammates_invited": 12,
+        "setup_completed": true,
+        "events": [
+          "invited_department",
+          "sponsored_second_team",
+          "requested_expansion_call",
+          "shared_workspace"
+        ]
+      },
+      "reason": "A department invite, a second team, an expansion call, and a shared workspace. No advanced-use events."
+    },
+    {
+      "id": "champion_010",
+      "expected_persona": "champion",
+      "profile": {
+        "industry": "construction",
+        "job_role": "operations_director",
+        "plan": "enterprise",
+        "account_age_days": 80,
+        "sessions_last_7_days": 3,
+        "teammates_invited": 9,
+        "setup_completed": true,
+        "events": [
+          "requested_procurement_packet",
+          "presented_to_leadership",
+          "security_review_pending",
+          "shared_workspace",
+          "invited_department"
+        ]
+      },
+      "reason": "Procurement and a leadership presentation continue through one pending security review into a shared workspace and a department invite. The review occurs once."
+    },
+    {
+      "id": "champion_011",
+      "expected_persona": "champion",
+      "profile": {
+        "industry": "media",
+        "job_role": "managing_editor",
+        "plan": "team",
+        "account_age_days": 24,
+        "sessions_last_7_days": 5,
+        "teammates_invited": 8,
+        "setup_completed": true,
+        "events": [
+          "enabled_team_template",
+          "invited_department",
+          "created_internal_playbook"
+        ]
+      },
+      "reason": "A team template, a department invite, and an internal playbook."
+    },
+    {
+      "id": "champion_012",
+      "expected_persona": "champion",
+      "profile": {
+        "industry": "energy",
+        "job_role": "program_manager",
+        "plan": "enterprise",
+        "account_age_days": 90,
+        "sessions_last_7_days": 4,
+        "teammates_invited": 13,
+        "setup_completed": true,
+        "events": [
+          "sponsored_second_team",
+          "invited_department",
+          "requested_expansion_call",
+          "presented_to_leadership"
+        ]
+      },
+      "reason": "A second team, a department invite, an expansion call, and a leadership presentation."
+    },
+    {
+      "id": "champion_013",
+      "expected_persona": "champion",
+      "profile": {
+        "industry": "hospitality",
+        "job_role": "brand_manager",
+        "plan": "business",
+        "account_age_days": 36,
+        "sessions_last_7_days": 4,
+        "teammates_invited": 6,
+        "setup_completed": true,
+        "events": [
+          "shared_workspace",
+          "invited_department",
+          "created_internal_playbook"
+        ]
+      },
+      "reason": "A shared workspace, a department invite, and an internal playbook."
+    },
+    {
+      "id": "champion_014",
+      "expected_persona": "champion",
+      "profile": {
+        "industry": "agriculture",
+        "job_role": "regional_buyer",
+        "plan": "trial",
+        "account_age_days": 27,
+        "sessions_last_7_days": 3,
+        "teammates_invited": 5,
+        "setup_completed": true,
+        "events": [
+          "requested_expansion_call",
+          "invited_department",
+          "presented_to_leadership",
+          "enabled_team_template"
+        ]
+      },
+      "reason": "An expansion call, a department invite, a leadership presentation, and a team template. Setup is already complete."
+    },
+    {
+      "id": "champion_015",
+      "expected_persona": "champion",
+      "profile": {
+        "industry": "government",
+        "job_role": "program_lead",
+        "plan": "enterprise",
+        "account_age_days": 100,
+        "sessions_last_7_days": 4,
+        "teammates_invited": 7,
+        "setup_completed": true,
+        "events": [
+          "created_internal_playbook",
+          "asked_it_to_approve_rollout",
+          "invited_department",
+          "shared_workspace"
+        ]
+      },
+      "reason": "A playbook, an ask for IT to approve a wider rollout, a department invite, and a shared workspace."
+    },
+    {
+      "id": "champion_016",
+      "expected_persona": "champion",
+      "profile": {
+        "industry": "saas",
+        "job_role": "customer_success_lead",
+        "plan": "business",
+        "account_age_days": 48,
+        "sessions_last_7_days": 9,
+        "teammates_invited": 10,
+        "setup_completed": true,
+        "events": [
+          "used_api",
+          "resolved_queue",
+          "customized_dashboard",
+          "invited_department",
+          "enabled_team_template",
+          "sponsored_second_team"
+        ]
+      },
+      "reason": "API use, queue work, and a custom dashboard come first. The later events invite a department, enable a team template, and sponsor a second team."
+    },
+    {
+      "id": "champion_017",
+      "expected_persona": "champion",
+      "profile": {
+        "industry": "consulting",
+        "job_role": "principal",
+        "plan": "business",
+        "account_age_days": 42,
+        "sessions_last_7_days": 5,
+        "teammates_invited": 8,
+        "setup_completed": true,
+        "events": [
+          "presented_to_leadership",
+          "enabled_team_template",
+          "invited_department",
+          "created_internal_playbook"
+        ]
+      },
+      "reason": "A leadership presentation, a team template, a department invite, and a playbook."
+    },
+    {
+      "id": "champion_018",
+      "expected_persona": "champion",
+      "profile": {
+        "industry": "biotech",
+        "job_role": "scientific_director",
+        "plan": "enterprise",
+        "account_age_days": 64,
+        "sessions_last_7_days": 4,
+        "teammates_invited": 6,
+        "setup_completed": true,
+        "events": [
+          "requested_procurement_packet",
+          "enabled_team_template",
+          "invited_department",
+          "created_internal_playbook"
+        ]
+      },
+      "reason": "A procurement packet, a team template, a department invite, and a playbook."
+    },
+    {
+      "id": "champion_019",
+      "expected_persona": "champion",
+      "profile": {
+        "industry": "real_estate",
+        "job_role": "brokerage_owner",
+        "plan": "team",
+        "account_age_days": 30,
+        "sessions_last_7_days": 6,
+        "teammates_invited": 18,
+        "setup_completed": true,
+        "events": [
+          "invited_department",
+          "sponsored_second_team",
+          "enabled_team_template",
+          "requested_expansion_call"
+        ]
+      },
+      "reason": "A department invite, a second team, a team template, and an expansion call."
+    },
+    {
+      "id": "champion_020",
+      "expected_persona": "champion",
+      "profile": {
+        "industry": "staffing",
+        "job_role": "agency_owner",
+        "plan": "business",
+        "account_age_days": 38,
+        "sessions_last_7_days": 4,
+        "teammates_invited": 9,
+        "setup_completed": true,
+        "events": [
+          "sponsored_second_team",
+          "created_internal_playbook",
+          "invited_department",
+          "requested_expansion_call"
+        ]
+      },
+      "reason": "A second team, a playbook, a department invite, and an expansion call."
+    },
+    {
+      "id": "blocked_001",
+      "expected_persona": "blocked",
+      "profile": {
+        "industry": "healthcare",
+        "job_role": "practice_manager",
+        "plan": "trial",
+        "account_age_days": 8,
+        "sessions_last_7_days": 5,
+        "teammates_invited": 0,
+        "setup_completed": false,
+        "events": [
+          "started_sso_setup",
+          "sso_setup_failed",
+          "started_sso_setup",
+          "sso_setup_failed"
+        ]
+      },
+      "reason": "Repeatedly trying to complete setup but hitting the same failure."
+    },
+    {
+      "id": "blocked_002",
+      "expected_persona": "blocked",
+      "profile": {
+        "industry": "fintech",
+        "job_role": "security_admin",
+        "plan": "enterprise",
+        "account_age_days": 19,
+        "sessions_last_7_days": 6,
+        "teammates_invited": 0,
+        "setup_completed": false,
+        "events": [
+          "started_sso_setup",
+          "sso_setup_failed",
+          "opened_support_ticket",
+          "started_sso_setup",
+          "sso_setup_failed"
+        ]
+      },
+      "reason": "SSO setup fails, a support ticket is opened, and SSO setup fails again."
+    },
+    {
+      "id": "blocked_003",
+      "expected_persona": "blocked",
+      "profile": {
+        "industry": "education",
+        "job_role": "records_clerk",
+        "plan": "team",
+        "account_age_days": 11,
+        "sessions_last_7_days": 4,
+        "teammates_invited": 1,
+        "setup_completed": false,
+        "events": [
+          "started_setup",
+          "integration_auth_failed",
+          "opened_support_ticket",
+          "integration_auth_failed",
+          "invited_teammate"
+        ]
+      },
+      "reason": "Integration auth fails, a support ticket is opened, and auth fails again. The later teammate invite is not a successful setup event."
+    },
+    {
+      "id": "blocked_004",
+      "expected_persona": "blocked",
+      "profile": {
+        "industry": "logistics",
+        "job_role": "warehouse_supervisor",
+        "plan": "trial",
+        "account_age_days": 9,
+        "sessions_last_7_days": 5,
+        "teammates_invited": 0,
+        "setup_completed": false,
+        "events": [
+          "started_setup",
+          "import_failed",
+          "import_failed",
+          "opened_support_ticket",
+          "setup_abandoned"
+        ]
+      },
+      "reason": "The import fails twice, a support ticket is opened, and setup is abandoned."
+    },
+    {
+      "id": "blocked_005",
+      "expected_persona": "blocked",
+      "profile": {
+        "industry": "legal",
+        "job_role": "it_manager",
+        "plan": "business",
+        "account_age_days": 15,
+        "sessions_last_7_days": 4,
+        "teammates_invited": 0,
+        "setup_completed": false,
+        "events": [
+          "started_sso_setup",
+          "permission_denied",
+          "permission_denied",
+          "opened_support_ticket"
+        ]
+      },
+      "reason": "Permission is denied twice during SSO setup, and a support ticket is open."
+    },
+    {
+      "id": "blocked_006",
+      "expected_persona": "blocked",
+      "profile": {
+        "industry": "retail",
+        "job_role": "store_manager",
+        "plan": "team",
+        "account_age_days": 6,
+        "sessions_last_7_days": 7,
+        "teammates_invited": 3,
+        "setup_completed": false,
+        "events": [
+          "invited_teammate",
+          "invited_teammate",
+          "invited_teammate",
+          "hit_seat_limit",
+          "hit_seat_limit",
+          "opened_support_ticket"
+        ]
+      },
+      "reason": "Three teammate invites run into the seat limit twice, and a support ticket is opened. No successful setup event comes after."
+    },
+    {
+      "id": "blocked_007",
+      "expected_persona": "blocked",
+      "profile": {
+        "industry": "manufacturing",
+        "job_role": "controls_engineer",
+        "plan": "business",
+        "account_age_days": 22,
+        "sessions_last_7_days": 5,
+        "teammates_invited": 0,
+        "setup_completed": false,
+        "events": [
+          "started_setup",
+          "connected_integration",
+          "integration_auth_failed",
+          "integration_auth_failed",
+          "opened_support_ticket"
+        ]
+      },
+      "reason": "The integration connects, then auth fails twice and a support ticket is opened. Nothing succeeds after the failures."
+    },
+    {
+      "id": "blocked_008",
+      "expected_persona": "blocked",
+      "profile": {
+        "industry": "nonprofit",
+        "job_role": "operations_manager",
+        "plan": "free",
+        "account_age_days": 4,
+        "sessions_last_7_days": 3,
+        "teammates_invited": 0,
+        "setup_completed": false,
+        "events": [
+          "started_setup",
+          "billing_verification_failed",
+          "billing_verification_failed",
+          "opened_support_ticket"
+        ]
+      },
+      "reason": "Billing verification fails twice, and a support ticket is opened."
+    },
+    {
+      "id": "blocked_009",
+      "expected_persona": "blocked",
+      "profile": {
+        "industry": "insurance",
+        "job_role": "portal_admin",
+        "plan": "enterprise",
+        "account_age_days": 55,
+        "sessions_last_7_days": 4,
+        "teammates_invited": 0,
+        "setup_completed": true,
+        "events": [
+          "security_review_pending",
+          "opened_support_ticket",
+          "security_review_pending",
+          "setup_abandoned"
+        ]
+      },
+      "reason": "Setup is already complete. This window is a security review that stays pending, a support ticket, and an abandoned attempt. No workspace is shared."
+    },
+    {
+      "id": "blocked_010",
+      "expected_persona": "blocked",
+      "profile": {
+        "industry": "construction",
+        "job_role": "superintendent",
+        "plan": "trial",
+        "account_age_days": 13,
+        "sessions_last_7_days": 6,
+        "teammates_invited": 0,
+        "setup_completed": false,
+        "events": [
+          "admin_approval_pending",
+          "started_setup",
+          "permission_denied",
+          "admin_approval_pending",
+          "opened_support_ticket"
+        ]
+      },
+      "reason": "Admin approval is pending twice, with a permission denial and a support ticket. No setup step succeeds."
+    },
+    {
+      "id": "blocked_011",
+      "expected_persona": "blocked",
+      "profile": {
+        "industry": "media",
+        "job_role": "studio_manager",
+        "plan": "team",
+        "account_age_days": 17,
+        "sessions_last_7_days": 5,
+        "teammates_invited": 2,
+        "setup_completed": false,
+        "events": [
+          "invited_teammate",
+          "invited_teammate",
+          "permission_denied",
+          "permission_denied",
+          "opened_support_ticket"
+        ]
+      },
+      "reason": "Two teammate invites are followed by two permission denials and a support ticket."
+    },
+    {
+      "id": "blocked_012",
+      "expected_persona": "blocked",
+      "profile": {
+        "industry": "energy",
+        "job_role": "identity_admin",
+        "plan": "enterprise",
+        "account_age_days": 27,
+        "sessions_last_7_days": 8,
+        "teammates_invited": 0,
+        "setup_completed": false,
+        "events": [
+          "started_sso_setup",
+          "sso_setup_failed",
+          "started_sso_setup",
+          "sso_setup_failed",
+          "started_sso_setup",
+          "sso_setup_failed"
+        ]
+      },
+      "reason": "SSO setup fails three times. No successful setup event follows."
+    },
+    {
+      "id": "blocked_013",
+      "expected_persona": "blocked",
+      "profile": {
+        "industry": "hospitality",
+        "job_role": "front_desk_lead",
+        "plan": "business",
+        "account_age_days": 10,
+        "sessions_last_7_days": 4,
+        "teammates_invited": 0,
+        "setup_completed": false,
+        "events": [
+          "billing_verification_failed",
+          "started_setup",
+          "billing_verification_failed",
+          "setup_abandoned"
+        ]
+      },
+      "reason": "Billing verification fails, setup is attempted, billing verification fails again, and setup is abandoned."
+    },
+    {
+      "id": "blocked_014",
+      "expected_persona": "blocked",
+      "profile": {
+        "industry": "agriculture",
+        "job_role": "office_manager",
+        "plan": "free",
+        "account_age_days": 7,
+        "sessions_last_7_days": 3,
+        "teammates_invited": 0,
+        "setup_completed": false,
+        "events": [
+          "started_setup",
+          "import_failed",
+          "import_failed",
+          "setup_abandoned"
+        ]
+      },
+      "reason": "The import fails twice and setup is abandoned."
+    },
+    {
+      "id": "blocked_015",
+      "expected_persona": "blocked",
+      "profile": {
+        "industry": "government",
+        "job_role": "security_officer",
+        "plan": "enterprise",
+        "account_age_days": 34,
+        "sessions_last_7_days": 5,
+        "teammates_invited": 0,
+        "setup_completed": false,
+        "events": [
+          "started_sso_setup",
+          "security_review_pending",
+          "security_review_pending",
+          "opened_support_ticket"
+        ]
+      },
+      "reason": "The security review is pending twice during SSO setup, and a support ticket is open. No department is invited."
+    },
+    {
+      "id": "blocked_016",
+      "expected_persona": "blocked",
+      "profile": {
+        "industry": "saas",
+        "job_role": "support_manager",
+        "plan": "team",
+        "account_age_days": 12,
+        "sessions_last_7_days": 6,
+        "teammates_invited": 0,
+        "setup_completed": false,
+        "events": [
+          "started_setup",
+          "mapped_fields",
+          "configured_notifications",
+          "import_failed",
+          "import_failed",
+          "opened_support_ticket"
+        ]
+      },
+      "reason": "Fields are mapped and notifications are set, then the import fails twice and a support ticket is opened. Nothing succeeds after the failures."
+    },
+    {
+      "id": "blocked_017",
+      "expected_persona": "blocked",
+      "profile": {
+        "industry": "consulting",
+        "job_role": "project_lead",
+        "plan": "trial",
+        "account_age_days": 9,
+        "sessions_last_7_days": 4,
+        "teammates_invited": 0,
+        "setup_completed": false,
+        "events": [
+          "started_setup",
+          "integration_auth_failed",
+          "integration_auth_failed",
+          "setup_abandoned"
+        ]
+      },
+      "reason": "Integration auth fails twice and setup is abandoned."
+    },
+    {
+      "id": "blocked_018",
+      "expected_persona": "blocked",
+      "profile": {
+        "industry": "biotech",
+        "job_role": "qa_lead",
+        "plan": "enterprise",
+        "account_age_days": 48,
+        "sessions_last_7_days": 5,
+        "teammates_invited": 0,
+        "setup_completed": true,
+        "events": [
+          "connected_integration",
+          "integration_auth_failed",
+          "integration_auth_failed",
+          "opened_support_ticket",
+          "setup_abandoned"
+        ]
+      },
+      "reason": "Setup was already complete. A new integration connects, then auth fails twice, a support ticket is opened, and the attempt is abandoned."
+    },
+    {
+      "id": "blocked_019",
+      "expected_persona": "blocked",
+      "profile": {
+        "industry": "real_estate",
+        "job_role": "broker",
+        "plan": "team",
+        "account_age_days": 14,
+        "sessions_last_7_days": 4,
+        "teammates_invited": 0,
+        "setup_completed": false,
+        "events": [
+          "started_sso_setup",
+          "sso_setup_failed",
+          "opened_support_ticket",
+          "sso_setup_failed"
+        ]
+      },
+      "reason": "SSO fails, a support ticket is opened, and SSO fails again."
+    },
+    {
+      "id": "blocked_020",
+      "expected_persona": "blocked",
+      "profile": {
+        "industry": "staffing",
+        "job_role": "recruiting_ops",
+        "plan": "business",
+        "account_age_days": 16,
+        "sessions_last_7_days": 5,
+        "teammates_invited": 2,
+        "setup_completed": false,
+        "events": [
+          "invited_teammate",
+          "invited_teammate",
+          "started_setup",
+          "admin_approval_pending",
+          "permission_denied",
+          "admin_approval_pending"
+        ]
+      },
+      "reason": "Two teammates are invited, then admin approval stays pending twice and permission is denied. No setup step succeeds."
+    },
+    {
+      "id": "power_user_001",
+      "expected_persona": "power_user",
+      "profile": {
+        "industry": "healthcare",
+        "job_role": "nurse_auditor",
+        "plan": "business",
+        "account_age_days": 120,
+        "sessions_last_7_days": 14,
+        "teammates_invited": 0,
+        "setup_completed": true,
+        "events": [
+          "used_advanced_filter",
+          "resolved_queue",
+          "saved_advanced_view",
+          "scheduled_recurring_report",
+          "ran_bulk_action"
+        ]
+      },
+      "reason": "Advanced filters, a queue, a saved view, a recurring report, and a bulk action. Setup is complete, with no advocacy."
+    },
+    {
+      "id": "power_user_002",
+      "expected_persona": "power_user",
+      "profile": {
+        "industry": "fintech",
+        "job_role": "risk_analyst",
+        "plan": "business",
+        "account_age_days": 80,
+        "sessions_last_7_days": 11,
+        "teammates_invited": 1,
+        "setup_completed": true,
+        "events": [
+          "invited_teammate",
+          "used_api",
+          "created_automation",
+          "used_webhook",
+          "exported_production_data",
+          "edited_workflow"
+        ]
+      },
+      "reason": "One teammate invite is followed by API use, an automation, a webhook, a production export, and a workflow edit."
+    },
+    {
+      "id": "power_user_003",
+      "expected_persona": "power_user",
+      "profile": {
+        "industry": "education",
+        "job_role": "assessment_specialist",
+        "plan": "team",
+        "account_age_days": 60,
+        "sessions_last_7_days": 9,
+        "teammates_invited": 0,
+        "setup_completed": true,
+        "events": [
+          "saved_advanced_view",
+          "used_advanced_filter",
+          "scheduled_recurring_report",
+          "exported_production_data"
+        ]
+      },
+      "reason": "A saved view, advanced filters, a recurring report, and a production export."
+    },
+    {
+      "id": "power_user_004",
+      "expected_persona": "power_user",
+      "profile": {
+        "industry": "logistics",
+        "job_role": "dispatch_planner",
+        "plan": "business",
+        "account_age_days": 45,
+        "sessions_last_7_days": 16,
+        "teammates_invited": 0,
+        "setup_completed": true,
+        "events": [
+          "resolved_queue",
+          "ran_bulk_action",
+          "edited_workflow",
+          "used_advanced_filter",
+          "customized_dashboard"
+        ]
+      },
+      "reason": "Queue work, a bulk action, a workflow edit, advanced filters, and a custom dashboard."
+    },
+    {
+      "id": "power_user_005",
+      "expected_persona": "power_user",
+      "profile": {
+        "industry": "legal",
+        "job_role": "conflicts_analyst",
+        "plan": "enterprise",
+        "account_age_days": 200,
+        "sessions_last_7_days": 7,
+        "teammates_invited": 0,
+        "setup_completed": true,
+        "events": [
+          "used_api",
+          "used_webhook",
+          "scheduled_recurring_report",
+          "exported_production_data"
+        ]
+      },
+      "reason": "API use, a webhook, a recurring report, and a production export."
+    },
+    {
+      "id": "power_user_006",
+      "expected_persona": "power_user",
+      "profile": {
+        "industry": "retail",
+        "job_role": "allocation_analyst",
+        "plan": "team",
+        "account_age_days": 34,
+        "sessions_last_7_days": 10,
+        "teammates_invited": 0,
+        "setup_completed": true,
+        "events": [
+          "ran_bulk_action",
+          "used_advanced_filter",
+          "saved_advanced_view",
+          "customized_dashboard",
+          "edited_workflow"
+        ]
+      },
+      "reason": "A bulk action, advanced filters, a saved view, a custom dashboard, and a workflow edit."
+    },
+    {
+      "id": "power_user_007",
+      "expected_persona": "power_user",
+      "profile": {
+        "industry": "manufacturing",
+        "job_role": "reliability_engineer",
+        "plan": "business",
+        "account_age_days": 90,
+        "sessions_last_7_days": 8,
+        "teammates_invited": 0,
+        "setup_completed": true,
+        "events": [
+          "created_automation",
+          "used_webhook",
+          "edited_workflow",
+          "scheduled_recurring_report"
+        ]
+      },
+      "reason": "An automation, a webhook, a workflow edit, and a recurring report."
+    },
+    {
+      "id": "power_user_008",
+      "expected_persona": "power_user",
+      "profile": {
+        "industry": "nonprofit",
+        "job_role": "grants_analyst",
+        "plan": "free",
+        "account_age_days": 50,
+        "sessions_last_7_days": 6,
+        "teammates_invited": 0,
+        "setup_completed": true,
+        "events": [
+          "used_advanced_filter",
+          "ran_bulk_action",
+          "exported_production_data",
+          "customized_dashboard"
+        ]
+      },
+      "reason": "Advanced filters, a bulk action, a production export, and a custom dashboard."
+    },
+    {
+      "id": "power_user_009",
+      "expected_persona": "power_user",
+      "profile": {
+        "industry": "insurance",
+        "job_role": "claims_examiner",
+        "plan": "business",
+        "account_age_days": 75,
+        "sessions_last_7_days": 13,
+        "teammates_invited": 0,
+        "setup_completed": true,
+        "events": [
+          "resolved_queue",
+          "used_advanced_filter",
+          "ran_bulk_action",
+          "saved_advanced_view",
+          "customized_dashboard"
+        ]
+      },
+      "reason": "A queue, advanced filters, a bulk action, a saved view, and a custom dashboard."
+    },
+    {
+      "id": "power_user_010",
+      "expected_persona": "power_user",
+      "profile": {
+        "industry": "construction",
+        "job_role": "estimator",
+        "plan": "team",
+        "account_age_days": 40,
+        "sessions_last_7_days": 4,
+        "teammates_invited": 0,
+        "setup_completed": true,
+        "events": [
+          "used_api",
+          "exported_production_data",
+          "created_automation",
+          "scheduled_recurring_report"
+        ]
+      },
+      "reason": "The events are API use, a production export, an automation, and a recurring report. Setup is complete."
+    },
+    {
+      "id": "power_user_011",
+      "expected_persona": "power_user",
+      "profile": {
+        "industry": "media",
+        "job_role": "research_editor",
+        "plan": "business",
+        "account_age_days": 66,
+        "sessions_last_7_days": 8,
+        "teammates_invited": 0,
+        "setup_completed": true,
+        "events": [
+          "saved_advanced_view",
+          "used_advanced_filter",
+          "scheduled_recurring_report",
+          "exported_production_data",
+          "customized_dashboard"
+        ]
+      },
+      "reason": "A saved view, advanced filters, a recurring report, a production export, and a custom dashboard."
+    },
+    {
+      "id": "power_user_012",
+      "expected_persona": "power_user",
+      "profile": {
+        "industry": "energy",
+        "job_role": "outage_coordinator",
+        "plan": "enterprise",
+        "account_age_days": 110,
+        "sessions_last_7_days": 12,
+        "teammates_invited": 2,
+        "setup_completed": true,
+        "events": [
+          "invited_teammate",
+          "invited_teammate",
+          "resolved_queue",
+          "used_api",
+          "created_automation",
+          "ran_bulk_action"
+        ]
+      },
+      "reason": "Two teammate invites are followed by queue work, API use, an automation, and a bulk action. No advocacy events."
+    },
+    {
+      "id": "power_user_013",
+      "expected_persona": "power_user",
+      "profile": {
+        "industry": "hospitality",
+        "job_role": "yield_analyst",
+        "plan": "business",
+        "account_age_days": 55,
+        "sessions_last_7_days": 9,
+        "teammates_invited": 0,
+        "setup_completed": true,
+        "events": [
+          "customized_dashboard",
+          "scheduled_recurring_report",
+          "used_advanced_filter",
+          "exported_production_data"
+        ]
+      },
+      "reason": "A custom dashboard, a recurring report, advanced filters, and a production export."
+    },
+    {
+      "id": "power_user_014",
+      "expected_persona": "power_user",
+      "profile": {
+        "industry": "agriculture",
+        "job_role": "supply_planner",
+        "plan": "trial",
+        "account_age_days": 38,
+        "sessions_last_7_days": 7,
+        "teammates_invited": 0,
+        "setup_completed": true,
+        "events": [
+          "ran_bulk_action",
+          "edited_workflow",
+          "used_advanced_filter",
+          "saved_advanced_view"
+        ]
+      },
+      "reason": "A bulk action, a workflow edit, advanced filters, and a saved view. Setup is complete."
+    },
+    {
+      "id": "power_user_015",
+      "expected_persona": "power_user",
+      "profile": {
+        "industry": "government",
+        "job_role": "caseworker",
+        "plan": "enterprise",
+        "account_age_days": 150,
+        "sessions_last_7_days": 11,
+        "teammates_invited": 0,
+        "setup_completed": true,
+        "events": [
+          "resolved_queue",
+          "used_advanced_filter",
+          "edited_workflow",
+          "scheduled_recurring_report",
+          "exported_production_data"
+        ]
+      },
+      "reason": "A queue, advanced filters, a workflow edit, a recurring report, and a production export."
+    },
+    {
+      "id": "power_user_016",
+      "expected_persona": "power_user",
+      "profile": {
+        "industry": "saas",
+        "job_role": "oncall_engineer",
+        "plan": "business",
+        "account_age_days": 70,
+        "sessions_last_7_days": 15,
+        "teammates_invited": 8,
+        "setup_completed": true,
+        "events": [
+          "presented_to_leadership",
+          "invited_department",
+          "used_api",
+          "used_webhook",
+          "created_automation",
+          "edited_workflow",
+          "resolved_queue"
+        ]
+      },
+      "reason": "A leadership presentation and a department invite come first. The later events are API use, a webhook, an automation, a workflow edit, and queue work. Setup is complete."
+    },
+    {
+      "id": "power_user_017",
+      "expected_persona": "power_user",
+      "profile": {
+        "industry": "consulting",
+        "job_role": "delivery_consultant",
+        "plan": "trial",
+        "account_age_days": 29,
+        "sessions_last_7_days": 8,
+        "teammates_invited": 0,
+        "setup_completed": true,
+        "events": [
+          "customized_dashboard",
+          "exported_production_data",
+          "used_advanced_filter",
+          "edited_workflow",
+          "scheduled_recurring_report"
+        ]
+      },
+      "reason": "A custom dashboard, a production export, advanced filters, a workflow edit, and a recurring report."
+    },
+    {
+      "id": "power_user_018",
+      "expected_persona": "power_user",
+      "profile": {
+        "industry": "biotech",
+        "job_role": "assay_scientist",
+        "plan": "enterprise",
+        "account_age_days": 84,
+        "sessions_last_7_days": 6,
+        "teammates_invited": 0,
+        "setup_completed": true,
+        "events": [
+          "created_automation",
+          "used_webhook",
+          "used_api",
+          "resolved_queue"
+        ]
+      },
+      "reason": "An automation, a webhook, API use, and queue work."
+    },
+    {
+      "id": "power_user_019",
+      "expected_persona": "power_user",
+      "profile": {
+        "industry": "real_estate",
+        "job_role": "leasing_analyst",
+        "plan": "team",
+        "account_age_days": 47,
+        "sessions_last_7_days": 10,
+        "teammates_invited": 0,
+        "setup_completed": true,
+        "events": [
+          "hit_seat_limit",
+          "ran_bulk_action",
+          "used_advanced_filter",
+          "saved_advanced_view",
+          "scheduled_recurring_report",
+          "resolved_queue"
+        ]
+      },
+      "reason": "The seat limit is hit once. Later events are a bulk action, advanced filters, a saved view, a recurring report, and queue work."
+    },
+    {
+      "id": "power_user_020",
+      "expected_persona": "power_user",
+      "profile": {
+        "industry": "staffing",
+        "job_role": "sourcer",
+        "plan": "trial",
+        "account_age_days": 21,
+        "sessions_last_7_days": 9,
+        "teammates_invited": 0,
+        "setup_completed": true,
+        "events": [
+          "used_advanced_filter",
+          "ran_bulk_action",
+          "saved_advanced_view",
+          "exported_production_data",
+          "edited_workflow"
+        ]
+      },
+      "reason": "Advanced filters, a bulk action, a saved view, a production export, and a workflow edit. Setup is complete, and this window is not a first workflow."
+    },
+    {
+      "id": "unknown_001",
+      "expected_persona": "unknown",
+      "profile": {
+        "industry": "healthcare",
+        "job_role": "billing_specialist",
+        "plan": "business",
+        "account_age_days": 20,
+        "sessions_last_7_days": 0,
+        "teammates_invited": 0,
+        "setup_completed": false,
+        "events": [
+          "bounced_invoice_email"
+        ]
+      },
+      "reason": "The only event is a bounced invoice, and there are no sessions."
+    },
+    {
+      "id": "unknown_002",
+      "expected_persona": "unknown",
+      "profile": {
+        "industry": "fintech",
+        "job_role": "payments_auditor",
+        "plan": "team",
+        "account_age_days": 200,
+        "sessions_last_7_days": 0,
+        "teammates_invited": 0,
+        "setup_completed": true,
+        "events": []
+      },
+      "reason": "Setup is complete, and the recent window has no events."
+    },
+    {
+      "id": "unknown_003",
+      "expected_persona": "unknown",
+      "profile": {
+        "industry": "education",
+        "job_role": "substitute_teacher",
+        "plan": "free",
+        "account_age_days": 0,
+        "sessions_last_7_days": 1,
+        "teammates_invited": 0,
+        "setup_completed": false,
+        "events": [
+          "signed_up"
+        ]
+      },
+      "reason": "The only event is signup."
+    },
+    {
+      "id": "unknown_004",
+      "expected_persona": "unknown",
+      "profile": {
+        "industry": "logistics",
+        "job_role": "lane_planner",
+        "plan": "trial",
+        "account_age_days": 14,
+        "sessions_last_7_days": 1,
+        "teammates_invited": 0,
+        "setup_completed": true,
+        "events": [
+          "password_reset"
+        ]
+      },
+      "reason": "The only event is a password reset."
+    },
+    {
+      "id": "unknown_005",
+      "expected_persona": "unknown",
+      "profile": {
+        "industry": "legal",
+        "job_role": "paralegal",
+        "plan": "trial",
+        "account_age_days": 6,
+        "sessions_last_7_days": 2,
+        "teammates_invited": 0,
+        "setup_completed": false,
+        "events": [
+          "viewed_pricing",
+          "viewed_docs",
+          "sso_setup_failed",
+          "opened_support_ticket"
+        ]
+      },
+      "reason": "Two inquiry pages, one SSO failure, and a support ticket. That is not yet an evaluation, and the failure is not repeated."
+    },
+    {
+      "id": "unknown_006",
+      "expected_persona": "unknown",
+      "profile": {
+        "industry": "retail",
+        "job_role": "shift_lead",
+        "plan": "trial",
+        "account_age_days": 1,
+        "sessions_last_7_days": 1,
+        "teammates_invited": 0,
+        "setup_completed": false,
+        "events": [
+          "signed_up",
+          "opened_welcome_email"
+        ]
+      },
+      "reason": "Signup and the welcome email only."
+    },
+    {
+      "id": "unknown_007",
+      "expected_persona": "unknown",
+      "profile": {
+        "industry": "manufacturing",
+        "job_role": "buyer",
+        "plan": "trial",
+        "account_age_days": 9,
+        "sessions_last_7_days": 2,
+        "teammates_invited": 0,
+        "setup_completed": false,
+        "events": [
+          "viewed_docs",
+          "started_setup"
+        ]
+      },
+      "reason": "One doc view and a setup start. No further inquiry, and no successful setup step."
+    },
+    {
+      "id": "unknown_008",
+      "expected_persona": "unknown",
+      "profile": {
+        "industry": "nonprofit",
+        "job_role": "volunteer_coordinator",
+        "plan": "free",
+        "account_age_days": 3,
+        "sessions_last_7_days": 1,
+        "teammates_invited": 0,
+        "setup_completed": false,
+        "events": [
+          "viewed_account_settings"
+        ]
+      },
+      "reason": "The only event is an account-settings view."
+    },
+    {
+      "id": "unknown_009",
+      "expected_persona": "unknown",
+      "profile": {
+        "industry": "insurance",
+        "job_role": "field_agent",
+        "plan": "team",
+        "account_age_days": 4,
+        "sessions_last_7_days": 3,
+        "teammates_invited": 0,
+        "setup_completed": false,
+        "events": [
+          "created_automation",
+          "presented_to_leadership"
+        ]
+      },
+      "reason": "One automation and one leadership presentation. Setup is not complete, and neither group occurs twice."
+    },
+    {
+      "id": "unknown_010",
+      "expected_persona": "unknown",
+      "profile": {
+        "industry": "construction",
+        "job_role": "site_clerk",
+        "plan": "trial",
+        "account_age_days": 2,
+        "sessions_last_7_days": 2,
+        "teammates_invited": 0,
+        "setup_completed": false,
+        "events": [
+          "opened_support_ticket"
+        ]
+      },
+      "reason": "The only event is a support ticket, with no product failure and no pending gate."
+    },
+    {
+      "id": "unknown_011",
+      "expected_persona": "unknown",
+      "profile": {
+        "industry": "media",
+        "job_role": "intern",
+        "plan": "free",
+        "account_age_days": 30,
+        "sessions_last_7_days": 2,
+        "teammates_invited": 0,
+        "setup_completed": false,
+        "events": [
+          "viewed_docs",
+          "viewed_pricing"
+        ]
+      },
+      "reason": "One doc view and one pricing view. Two inquiry events are short of an evaluation."
+    },
+    {
+      "id": "unknown_012",
+      "expected_persona": "unknown",
+      "profile": {
+        "industry": "energy",
+        "job_role": "field_contractor",
+        "plan": "trial",
+        "account_age_days": 8,
+        "sessions_last_7_days": 1,
+        "teammates_invited": 0,
+        "setup_completed": false,
+        "events": [
+          "started_setup",
+          "setup_abandoned"
+        ]
+      },
+      "reason": "Setup starts and is abandoned, with no successful step and no repeated failure."
+    },
+    {
+      "id": "unknown_013",
+      "expected_persona": "unknown",
+      "profile": {
+        "industry": "hospitality",
+        "job_role": "night_auditor",
+        "plan": "team",
+        "account_age_days": 16,
+        "sessions_last_7_days": 2,
+        "teammates_invited": 0,
+        "setup_completed": true,
+        "events": [
+          "viewed_account_settings",
+          "password_reset"
+        ]
+      },
+      "reason": "Account settings and a password reset. No inquiry, setup success, advocacy, or advanced use."
+    },
+    {
+      "id": "unknown_014",
+      "expected_persona": "unknown",
+      "profile": {
+        "industry": "agriculture",
+        "job_role": "bookkeeper",
+        "plan": "free",
+        "account_age_days": 5,
+        "sessions_last_7_days": 1,
+        "teammates_invited": 0,
+        "setup_completed": false,
+        "events": [
+          "bounced_invoice_email",
+          "opened_welcome_email"
+        ]
+      },
+      "reason": "A bounced invoice and a welcome email. No product action."
+    },
+    {
+      "id": "unknown_015",
+      "expected_persona": "unknown",
+      "profile": {
+        "industry": "government",
+        "job_role": "clerk",
+        "plan": "enterprise",
+        "account_age_days": 60,
+        "sessions_last_7_days": 1,
+        "teammates_invited": 0,
+        "setup_completed": false,
+        "events": [
+          "viewed_security_overview"
+        ]
+      },
+      "reason": "A single security-page view. One inquiry event is not an evaluation."
+    },
+    {
+      "id": "unknown_016",
+      "expected_persona": "unknown",
+      "profile": {
+        "industry": "saas",
+        "job_role": "founder",
+        "plan": "business",
+        "account_age_days": 12,
+        "sessions_last_7_days": 3,
+        "teammates_invited": 1,
+        "setup_completed": false,
+        "events": [
+          "invited_teammate",
+          "viewed_pricing",
+          "import_failed",
+          "presented_to_leadership"
+        ]
+      },
+      "reason": "One teammate invite, one pricing view, one import failure, and one leadership presentation. No group meets its bar."
+    },
+    {
+      "id": "unknown_017",
+      "expected_persona": "unknown",
+      "profile": {
+        "industry": "consulting",
+        "job_role": "talent_coordinator",
+        "plan": "trial",
+        "account_age_days": 1,
+        "sessions_last_7_days": 4,
+        "teammates_invited": 0,
+        "setup_completed": false,
+        "events": [
+          "viewed_pricing",
+          "viewed_pricing",
+          "viewed_pricing",
+          "viewed_pricing"
+        ]
+      },
+      "reason": "Pricing is the only inquiry, repeated four times. Repeating one page is still one kind of inquiry."
+    },
+    {
+      "id": "unknown_018",
+      "expected_persona": "unknown",
+      "profile": {
+        "industry": "biotech",
+        "job_role": "site_receptionist",
+        "plan": "team",
+        "account_age_days": 7,
+        "sessions_last_7_days": 1,
+        "teammates_invited": 0,
+        "setup_completed": false,
+        "events": [
+          "signed_up",
+          "viewed_account_settings"
+        ]
+      },
+      "reason": "Signup and one view of account settings. No inquiry, setup success, or failure."
+    },
+    {
+      "id": "unknown_019",
+      "expected_persona": "unknown",
+      "profile": {
+        "industry": "real_estate",
+        "job_role": "showing_agent",
+        "plan": "trial",
+        "account_age_days": 11,
+        "sessions_last_7_days": 2,
+        "teammates_invited": 1,
+        "setup_completed": false,
+        "events": [
+          "invited_reviewer",
+          "hit_seat_limit"
+        ]
+      },
+      "reason": "One reviewer invite and one seat-limit hit. There is no inquiry, and the limit is not repeated."
+    },
+    {
+      "id": "unknown_020",
+      "expected_persona": "unknown",
+      "profile": {
+        "industry": "staffing",
+        "job_role": "desk_coordinator",
+        "plan": "free",
+        "account_age_days": 90,
+        "sessions_last_7_days": 1,
+        "teammates_invited": 0,
+        "setup_completed": true,
+        "events": [
+          "opened_welcome_email"
+        ]
+      },
+      "reason": "A welcome email on an account that is already set up. No recent product use."
+    }
+  ]
+}
