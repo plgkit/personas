@@ -2,7 +2,42 @@
 
 Define personas in a file. Record what people do. A scheduled command stores who matches.
 
-Python, TypeScript, and Go judge the same cases.
+Python, TypeScript, and Go judge the same cases. The license is [MIT](LICENSE).
+
+## Install
+
+The package metadata is ready for a registry. Nothing is published yet. Grab the source from this repository. We will publish to PyPI, npm, and the Go module proxy if there is interest.
+
+```bash
+git clone https://github.com/plgkit/personas.git
+```
+
+| Language | From the clone | What you get |
+|---|---|---|
+| Python | `pip install ./personas/packages/python` | `plgkit_personas` and the `plgkit-personas` command. Python 3.10 or newer. |
+| TypeScript | `npm install ./personas/packages/node` | `@plgkit/personas` on Node 22.13 or newer. The entry file is TypeScript. |
+| Go | `go get github.com/plgkit/personas@main` | `github.com/plgkit/personas/packages/go`. Run this inside your Go module. |
+
+Python can also install straight from GitHub:
+
+```bash
+pip install "plgkit-personas @ git+https://github.com/plgkit/personas.git#subdirectory=packages/python"
+```
+
+TypeScript installs from the cloned `packages/node` directory. The npm package lives there, so a GitHub URL of the repository root has no `package.json` to install.
+
+Go imports the package after `go get`:
+
+```go
+import plgkit "github.com/plgkit/personas/packages/go"
+```
+
+From a checkout, Node and Go run migrate like this:
+
+```bash
+node --experimental-strip-types packages/node/src/cli.ts migrate
+go run ./packages/go/cmd/plgkit-personas migrate
+```
 
 ## Get started
 

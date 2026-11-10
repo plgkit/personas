@@ -9,3 +9,4 @@ Read this before changing this repo.
 - Personas uses `plgkit_persona_events`, `plgkit_persona_traits`, and `plgkit_persona_snapshots`, plus its own migrations table, so it can share a database with nudges.
 - `persona()` reads the snapshot. `calculate` is what judges. Persona names live only in `personas.yml`.
 - Prefer fast unit tests. The demo is `spec/examples/demo/script/demo`. Do not leave it running.
+- The license is MIT. Packages install from this repository. Do not publish them to PyPI, npm, or a module proxy unless the task says to.

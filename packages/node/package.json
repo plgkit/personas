@@ -1,9 +1,17 @@
 {
   "name": "@plgkit/personas",
   "version": "0.0.1",
-  "private": true,
   "type": "module",
   "description": "PLGKit personas: turn product events into one persona per user.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/plgkit/personas.git",
+    "directory": "packages/node"
+  },
+  "bugs": {
+    "url": "https://github.com/plgkit/personas/issues"
+  },
   "engines": {
     "node": ">=22.13.0"
   },
