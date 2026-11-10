@@ -1,0 +1,22 @@
+{
+  "name": "@plgkit/personas",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "PLGKit personas: turn product events into one persona per user.",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "exports": "./src/index.ts",
+  "files": [
+    "src",
+    "migrations"
+  ],
+  "dependencies": {
+    "pg": "^8.23.1"
+  },
+  "scripts": {
+    "pretest": "node scripts/copy-migrations.js",
+    "test": "node --disable-warning=ExperimentalWarning --experimental-strip-types --test test/*.test.ts"
+  }
+}
