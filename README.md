@@ -34,7 +34,32 @@ personas:
           equals: billing_admin
 ```
 
-2. Create the tables, then record events and traits.
+2. Add `config.yml` at `plgkit/personas/config.yml`, under the directory you start the app from. Python, TypeScript, and Go look for that path in the current working directory. `migrate` and `calculate` do too, which is why the cron example below starts with `cd /app`.
+
+```
+your-app/plgkit/personas/config.yml
+your-app/plgkit/personas/personas.yml
+```
+
+The file has one key. `database_url_env` is the name of the environment variable that holds the database address.
+
+```yaml
+database_url_env: PLGKIT_DATABASE_URL
+```
+
+```bash
+export PLGKIT_DATABASE_URL="sqlite:///plgkit_events.sqlite"
+```
+
+| Value of `PLGKIT_DATABASE_URL` | Database |
+|---|---|
+| Unset | `plgkit_events.sqlite` in the current directory |
+| `sqlite:///path/to/file.sqlite` | That SQLite file |
+| `postgres://...` or `postgresql://...` | Postgres |
+
+A missing `config.yml` uses the variable name `PLGKIT_DATABASE_URL`. To use another name, change `database_url_env` and set that variable. Any other key in the file is an error. The sample file is [spec/examples/config.yml](spec/examples/config.yml).
+
+3. Create the tables, then record events and traits.
 
 ```bash
 plgkit-personas migrate
@@ -47,7 +72,7 @@ track(user_id, "app_opened")
 identify(user_id, {"role": "member"})
 ```
 
-3. Calculate on a schedule. The command judges everyone who has events or traits and stores one row each.
+4. Calculate on a schedule. The command judges everyone who has events or traits and stores one row each. Run it from the directory that contains `plgkit/personas/config.yml`.
 
 ```bash
 plgkit-personas calculate
@@ -57,7 +82,7 @@ plgkit-personas calculate
 15 2 * * * cd /app && plgkit-personas calculate
 ```
 
-4. Read the stored row. `persona` does not judge live. `persona_is` is true only when the stored winner is that name.
+5. Read the stored row. `persona` does not judge live. `persona_is` is true only when the stored winner is that name.
 
 ```python
 persona(user_id)
@@ -65,8 +90,6 @@ persona_is(user_id, "developer")
 ```
 
 A nudge audience is a function you write. It calls `persona_is`. See [spec/examples/nudges](spec/examples/nudges).
-
-`config.yml` only names the environment variable that holds the database address. The sample is [spec/examples/config.yml](spec/examples/config.yml).
 
 The contract, the criteria keys, and the sample result are in [spec/README.md](spec/README.md).
 

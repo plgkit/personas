@@ -9,7 +9,13 @@ your-app/plgkit/personas/config.yml
 
 `personas.yml` names the personas, their priority, and their criteria. The sample file defines `developer`, `billing_admin`, `champion`, `blocked`, and `member`.
 
-`config.yml` names the environment variable that holds the database address.
+`config.yml` belongs beside it. The packages find `plgkit/personas/config.yml` from the current working directory.
+
+```yaml
+database_url_env: PLGKIT_DATABASE_URL
+```
+
+Set `PLGKIT_DATABASE_URL` to a `sqlite:///` or `postgres://` address. Leave it unset to use `plgkit_events.sqlite` in the current directory.
 
 Then create the tables and calculate:
 
