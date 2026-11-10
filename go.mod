@@ -4,6 +4,8 @@ go 1.22
 
 require (
 	github.com/jackc/pgx/v5 v5.7.2
+	github.com/plgkit/nudges v0.0.0-20261105152037-db82c8caba83
+	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.36.1
 )
 
@@ -13,9 +15,11 @@ require (
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
+	github.com/kr/text v0.2.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/ncruces/go-strftime v0.1.9 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
+	github.com/rogpeppe/go-internal v1.13.1 // indirect
 	golang.org/x/crypto v0.31.0 // indirect
 	golang.org/x/exp v0.0.0-20230315142452-642cacee5cc0 // indirect
 	golang.org/x/sync v0.10.0 // indirect

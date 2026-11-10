@@ -14,7 +14,7 @@ spec/examples/demo/script/demo --backend node
 spec/examples/demo/script/demo --backend go
 ```
 
-Avery is blocked. Blake is a champion. Each line is a different nudge.
+Avery is blocked. Blake is a champion. Each line comes from a nudge file.
 
 ## Use it
 

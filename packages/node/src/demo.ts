@@ -1,14 +1,14 @@
-/** Print a nudge for Avery and a nudge for Blake. */
+/** Print a nudge for Avery and a nudge for Blake. The sentence comes from nudges. */
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { pathToFileURL, fileURLToPath } from "node:url";
 
+import { bind } from "../../../spec/examples/nudges/audiences.ts";
+import { loadMessages } from "../../../spec/examples/nudges/messages.ts";
 import { connect, loadMapping, loadPolicy, migrate, persona, track } from "./index.ts";
 
-const LINES: Record<string, string> = {
-  blocked: "Want help with the step you stopped on?",
-  champion: "Bring in the person you invited.",
-};
+const NUDGES_SHA = "db82c8caba8309266ef0b8cd39d98d9fb4f89e35";
 const SHOW = ["avery_blocked", "blake_champion"];
 
 const repo = repoRoot();
@@ -18,8 +18,15 @@ const mapping = loadMapping(path.join(examples, "mapping.yml"));
 const policy = loadPolicy(path.join(examples, "config.yml"));
 const now = fixture.calculated_at as string;
 const byName = new Map(fixture.cases.map((item: { name: string }) => [item.name, item]));
+const messages = loadMessages(path.join(examples, "nudges", "messages"));
 const db = connect("sqlite:///:memory:");
 migrate(db);
+
+const nudges = await import(pathToFileURL(path.join(nudgesRoot(), "packages", "node", "src", "decide.ts")).href);
+const nudgeStore = await import(pathToFileURL(path.join(nudgesRoot(), "packages", "node", "src", "store.ts")).href);
+const nudgeDb = nudgeStore.connect("sqlite:///:memory:");
+nudgeStore.migrate(nudgeDb);
+const audiences = bind({ db, now, mapping, policy });
 
 for (const name of SHOW) {
   const caseItem = byName.get(name) as {
@@ -39,10 +46,27 @@ for (const name of SHOW) {
     console.error(`${caseItem.user_id} is ${result.persona}, expected ${caseItem.persona}.`);
     process.exit(1);
   }
+  const shown = nudges.decide(
+    "home",
+    { user: { id: caseItem.user_id } },
+    messages,
+    { db: nudgeDb, audiences },
+  ) as { render_props?: { body?: string } }[];
+  if (shown.length !== 1 || !shown[0].render_props?.body) {
+    console.error(`${caseItem.user_id} matched ${shown.length} nudges.`);
+    process.exit(1);
+  }
   const label = caseItem.user_id.charAt(0).toUpperCase() + caseItem.user_id.slice(1);
-  const line = LINES[result.persona];
-  if (!line) process.exit(1);
-  console.log(`${label.padEnd(8, " ")} ${result.persona.padEnd(12, " ")} ${line}`);
+  console.log(`${label.padEnd(8, " ")} ${result.persona.padEnd(12, " ")} ${shown[0].render_props.body}`);
+}
+
+function nudgesRoot(): string {
+  const env = process.env.PLGKIT_NUDGES_ROOT?.trim();
+  if (env) return env;
+  const cache = path.join(os.homedir(), ".cache", "plgkit-nudges", NUDGES_SHA);
+  if (fs.existsSync(path.join(cache, "packages", "node", "src", "decide.ts"))) return cache;
+  console.error(`Set PLGKIT_NUDGES_ROOT to a nudges checkout at ${NUDGES_SHA}.`);
+  process.exit(1);
 }
 
 function repoRoot(): string {

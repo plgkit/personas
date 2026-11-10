@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Print a nudge for Avery and a nudge for Blake."""
+"""Print a nudge for Avery and a nudge for Blake.
+
+The sentence is the body of the nudge nudges selects. Copy lives in
+spec/examples/nudges/messages.
+"""
 
 import json
 import os
@@ -15,29 +19,46 @@ def repo_root():
 
 
 REPO = repo_root()
+sys.path.insert(0, str(REPO / "spec" / "examples" / "demo"))
+sys.path.insert(0, str(REPO / "spec" / "examples" / "nudges"))
 sys.path.insert(0, str(REPO / "packages" / "python"))
 
+from audiences import bind
+from messages import load_messages
+from nudges_root import nudges_root
 from plgkit_personas import connect, load_mapping, load_policy, migrate, persona, track
 
-LINES = {
-    "blocked": "Want help with the step you stopped on?",
-    "champion": "Bring in the person you invited.",
-}
 SHOW = ("avery_blocked", "blake_champion")
 
 
 def main():
     backend = _backend(sys.argv[1:])
-    if backend != "python":
+    if backend == "go":
         _exec_backend(backend)
+    os.environ["PLGKIT_NUDGES_ROOT"] = str(nudges_root())
+    if backend == "node":
+        _exec_backend(backend)
+    _python()
+
+
+def _python():
+    sys.path.insert(0, str(Path(os.environ["PLGKIT_NUDGES_ROOT"]) / "packages" / "python"))
+    from plgkit import connect as nudge_connect
+    from plgkit import decide
+    from plgkit import migrate as nudge_migrate
+
     fixture = json.loads((REPO / "spec" / "fixtures" / "cases.json").read_text(encoding="utf-8"))
     examples = REPO / "spec" / "examples"
     mapping = load_mapping(examples / "mapping.yml")
     policy = load_policy(examples / "config.yml")
     now = fixture["calculated_at"]
     by_name = {case["name"]: case for case in fixture["cases"]}
+    messages = load_messages(examples / "nudges" / "messages")
     db = connect("sqlite:///:memory:")
     migrate(db)
+    nudge_db = nudge_connect("sqlite:///:memory:")
+    nudge_migrate(nudge_db)
+    audiences = bind(db=db, now=now, mapping=mapping, policy=policy)
     for name in SHOW:
         case = by_name[name]
         for event in case["events"]:
@@ -55,7 +76,16 @@ def main():
             raise SystemExit(
                 f"{case['user_id']} is {result['persona']}, expected {case['persona']}."
             )
-        line = LINES[result["persona"]]
+        shown = decide(
+            "home",
+            {"user": {"id": case["user_id"]}},
+            messages,
+            db=nudge_db,
+            audiences=audiences,
+        )
+        if len(shown) != 1:
+            raise SystemExit(f"{case['user_id']} matched {len(shown)} nudges.")
+        line = shown[0]["render_props"]["body"]
         print(f"{case['user_id'].capitalize():<8} {result['persona']:<12} {line}")
 
 

@@ -1,0 +1,10 @@
+# Someone who already sent an invite.
+location: home
+surface: main-top
+component: Banner
+audience:
+  require_all:
+    - persona_is_champion
+render_props:
+  title: Your invite landed.
+  body: Bring in the person you invited.
