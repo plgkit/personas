@@ -11,17 +11,27 @@ your-app/plgkit/personas/personas.yml
 your-app/plgkit/personas/config.yml
 ```
 
+Both paths are relative to the current working directory. `plgkit-personas migrate` and `plgkit-personas calculate` use the directory you run them from.
+
 `personas.yml` is the only place persona names exist. A missing file means nobody matches.
 
-`config.yml` has one key.
+`config.yml` names the environment variable that holds the database address.
 
-| Key | Default | Meaning |
-|---|---|---|
-| `database_url_env` | `PLGKIT_DATABASE_URL` | Name of the variable that holds the database address |
+```yaml
+database_url_env: PLGKIT_DATABASE_URL
+```
 
-The address stays out of the file. A `postgres://` or `postgresql://` address uses Postgres. When the variable is unset, the package uses `plgkit_events.sqlite` in the current directory. Personas writes its own tables, so it can share that file with nudges.
+```bash
+export PLGKIT_DATABASE_URL="sqlite:///plgkit_events.sqlite"
+```
 
-Unknown config keys are an error.
+| Value of that variable | Database |
+|---|---|
+| Unset, or the file is missing | `plgkit_events.sqlite` in the current directory |
+| `sqlite:///path/to/file.sqlite` | That SQLite file |
+| `postgres://...` or `postgresql://...` | Postgres |
+
+A missing file uses the name `PLGKIT_DATABASE_URL`. Another name means you change `database_url_env` and set that variable. Any other key is an error. Personas writes its own tables, so it can share the database with nudges.
 
 ## Track and identify
 
