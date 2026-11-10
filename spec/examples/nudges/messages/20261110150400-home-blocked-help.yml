@@ -1,0 +1,10 @@
+# Someone who started setup and then went quiet.
+location: home
+surface: main-top
+component: Banner
+audience:
+  require_all:
+    - persona_is_blocked
+render_props:
+  title: Need a hand?
+  body: Want help with the step you stopped on?

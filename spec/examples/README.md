@@ -31,4 +31,11 @@ track(user_id, "created_doc", {"occurred_at": "2026-11-09T15:00:00Z"})
 persona(user_id)
 ```
 
-The [demo](demo) seeds Avery and Blake and prints a nudge for each.
+The [demo](demo) seeds Avery and Blake and asks nudges which line to print.
+
+To show a line from a persona, copy [nudges/audiences.py](nudges/audiences.py) (or the `.ts` / `.go` file) next to your nudge messages, and copy the two files in [nudges/messages](nudges/messages) into `plgkit/nudges/messages/`.
+
+| Message | Shown when | Line |
+|---|---|---|
+| `20261110150400-home-blocked-help` | `persona_is_blocked` | Want help with the step you stopped on? |
+| `20261110150401-home-champion-invite` | `persona_is_champion` | Bring in the person you invited. |
