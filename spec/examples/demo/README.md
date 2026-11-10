@@ -15,6 +15,6 @@ spec/examples/demo/script/demo --backend go
 | Avery | blocked | Want help with the step you stopped on? |
 | Blake | champion | Bring in the person you invited. |
 
-The events come from [cases.json](../../fixtures/cases.json). The sentences come from the nudge files in [../nudges/messages](../nudges/messages). `decide()` picks one. The package only returns the label and the reasons.
+The events come from [cases.json](../../fixtures/cases.json). The demo calls `calculate`, then `persona`, then nudges `decide()`. The sentences come from the nudge files in [../nudges/messages](../nudges/messages). The audience checks call `persona_is`.
 
 The demo downloads [nudges](https://github.com/plgkit/nudges) at commit `db82c8caba8309266ef0b8cd39d98d9fb4f89e35` into `~/.cache/plgkit-nudges/`. Set `PLGKIT_NUDGES_ROOT` to use a checkout you already have. A private checkout uses `gh auth token` when that command works.

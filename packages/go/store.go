@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"embed"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"regexp"
@@ -221,6 +222,108 @@ func listEvents(db *sql.DB, userID string) ([]map[string]any, error) {
 	return events, nil
 }
 
+func upsertTrait(db *sql.DB, userID, key, value, updatedAt string) error {
+	_, err := dbExec(
+		db,
+		"INSERT INTO plgkit_persona_traits (user_id, key, value, updated_at) VALUES (?, ?, ?, ?) "+
+			"ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
+		userID, key, value, updatedAt,
+	)
+	return err
+}
+
+func listTraits(db *sql.DB, userID string) (map[string]string, error) {
+	rows, err := dbQuery(db, "SELECT key, value FROM plgkit_persona_traits WHERE user_id = ? ORDER BY key ASC", userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	traits := map[string]string{}
+	for rows.Next() {
+		var key, value string
+		if err := rows.Scan(&key, &value); err != nil {
+			return nil, err
+		}
+		traits[key] = value
+	}
+	return traits, rows.Err()
+}
+
+func listUserIDs(db *sql.DB) ([]string, error) {
+	rows, err := dbQuery(
+		db,
+		"SELECT user_id FROM plgkit_persona_events UNION SELECT user_id FROM plgkit_persona_traits ORDER BY user_id ASC",
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	ids := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+func writeSnapshot(db *sql.DB, result Result) error {
+	matched, err := json.Marshal(result.Matched)
+	if err != nil {
+		return err
+	}
+	reasons, err := json.Marshal(result.Reasons)
+	if err != nil {
+		return err
+	}
+	_, err = dbExec(
+		db,
+		"INSERT INTO plgkit_persona_snapshots (user_id, persona, matched, reasons, calculated_at) VALUES (?, ?, ?, ?, ?) "+
+			"ON CONFLICT(user_id) DO UPDATE SET persona = excluded.persona, matched = excluded.matched, "+
+			"reasons = excluded.reasons, calculated_at = excluded.calculated_at",
+		result.UserID, result.Persona, string(matched), string(reasons), result.CalculatedAt,
+	)
+	return err
+}
+
+func readSnapshot(db *sql.DB, userID string) (*Result, error) {
+	rows, err := dbQuery(
+		db,
+		"SELECT user_id, persona, matched, reasons, calculated_at FROM plgkit_persona_snapshots WHERE user_id = ?",
+		userID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+		return nil, nil
+	}
+	var result Result
+	var matched, reasons string
+	if err := rows.Scan(&result.UserID, &result.Persona, &matched, &reasons, &result.CalculatedAt); err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal([]byte(matched), &result.Matched); err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal([]byte(reasons), &result.Reasons); err != nil {
+		return nil, err
+	}
+	if result.Matched == nil {
+		result.Matched = []string{}
+	}
+	if result.Reasons == nil {
+		result.Reasons = []Reason{}
+	}
+	return &result, nil
+}
+
 func openSQLite(url string) (*sql.DB, error) {
 	file, err := sqlitePath(url)
 	if err != nil {
@@ -361,6 +464,15 @@ func sqlStatements(text string) []string {
 	return found
 }
 
+func defaultConfigPath() string {
+	candidate := "plgkit/personas/config.yml"
+	info, err := os.Stat(candidate)
+	if err == nil && !info.IsDir() {
+		return candidate
+	}
+	return ""
+}
+
 func envVarName(configPath string) (string, error) {
 	path := configPath
 	if path == "" {
@@ -372,6 +484,16 @@ func envVarName(configPath string) (string, error) {
 	raw, err := readFlat(path)
 	if err != nil {
 		return "", err
+	}
+	unknown := []string{}
+	for key := range raw {
+		if key != "database_url_env" {
+			unknown = append(unknown, key)
+		}
+	}
+	sort.Strings(unknown)
+	if len(unknown) > 0 {
+		return "", fail("Unknown config key: " + strings.Join(unknown, ", ") + ".")
 	}
 	name := raw["database_url_env"]
 	if name == "" {

@@ -132,6 +132,75 @@ export function insertEvent(
   }
 }
 
+export function upsertTrait(db: SqlDB, userId: string, key: string, value: string, updatedAt: string): void {
+  db.prepare(
+    "INSERT INTO plgkit_persona_traits (user_id, key, value, updated_at) VALUES (?, ?, ?, ?) " +
+      "ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
+  ).run(userId, key, value, updatedAt);
+}
+
+export function listTraits(db: SqlDB, userId: string): Record<string, string> {
+  const rows = db.prepare(
+    "SELECT key, value FROM plgkit_persona_traits WHERE user_id = ? ORDER BY key ASC",
+  ).all(userId) as { key: string; value: string }[];
+  const traits: Record<string, string> = {};
+  for (const row of rows) traits[row.key] = row.value;
+  return traits;
+}
+
+export function listUserIds(db: SqlDB): string[] {
+  const rows = db.prepare(
+    "SELECT user_id FROM plgkit_persona_events UNION SELECT user_id FROM plgkit_persona_traits ORDER BY user_id ASC",
+  ).all() as { user_id: string }[];
+  return rows.map((row) => row.user_id);
+}
+
+export function writeSnapshot(db: SqlDB, result: {
+  user_id: string;
+  persona: string;
+  matched: string[];
+  reasons: unknown[];
+  calculated_at: string;
+}): void {
+  db.prepare(
+    "INSERT INTO plgkit_persona_snapshots (user_id, persona, matched, reasons, calculated_at) VALUES (?, ?, ?, ?, ?) " +
+      "ON CONFLICT(user_id) DO UPDATE SET persona = excluded.persona, matched = excluded.matched, " +
+      "reasons = excluded.reasons, calculated_at = excluded.calculated_at",
+  ).run(
+    result.user_id,
+    result.persona,
+    JSON.stringify(result.matched),
+    JSON.stringify(result.reasons),
+    result.calculated_at,
+  );
+}
+
+export function readSnapshot(db: SqlDB, userId: string): {
+  user_id: string;
+  persona: string;
+  matched: string[];
+  reasons: { kind: string; action?: string; occurred_at?: string; key?: string; equals?: string }[];
+  calculated_at: string;
+} | null {
+  const row = db.prepare(
+    "SELECT user_id, persona, matched, reasons, calculated_at FROM plgkit_persona_snapshots WHERE user_id = ?",
+  ).get(userId) as {
+    user_id: string;
+    persona: string;
+    matched: string;
+    reasons: string;
+    calculated_at: string;
+  } | undefined;
+  if (!row) return null;
+  return {
+    user_id: row.user_id,
+    persona: row.persona,
+    matched: JSON.parse(row.matched),
+    reasons: JSON.parse(row.reasons),
+    calculated_at: row.calculated_at,
+  };
+}
+
 export function listEvents(db: SqlDB, userId: string): { action: string; occurred_at: string }[] {
   try {
     const rows = db
@@ -260,6 +329,8 @@ function envVarName(configPath?: string | null): string {
   if (!resolved) resolved = defaultConfigFile();
   if (!resolved) return DEFAULT_DATABASE_URL_ENV;
   const raw = readFlat(resolved);
+  const unknown = Object.keys(raw).filter((key) => key !== "database_url_env").sort();
+  if (unknown.length > 0) throw new PlgkitError(`Unknown config key: ${unknown.join(", ")}.`);
   const name = raw.database_url_env ?? DEFAULT_DATABASE_URL_ENV;
   if (!ENV_NAME.test(name)) {
     throw new PlgkitError(

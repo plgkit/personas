@@ -3,13 +3,3 @@
 # Do not put the address here. It can contain a password, and this file is committed.
 # If that variable is unset, plgkit uses plgkit_events.sqlite in the current directory.
 database_url_env: PLGKIT_DATABASE_URL
-
-# How far back persona() looks, and how long "quiet" is.
-# silence_days has to be smaller than lookback_days.
-lookback_days: 14
-silence_days: 7
-
-# First label that matches wins: champion, power_user, blocked, implementer, evaluator.
-champion_min: 1
-power_user_min: 8
-implementer_min: 2

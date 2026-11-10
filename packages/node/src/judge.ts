@@ -1,60 +1,49 @@
-/** Turn stored events into one persona. No database, no clock of its own. */
-import { normalizePolicy, type Policy } from "./config.ts";
+/** Match one user against the personas in personas.yml. No database. */
 import { PlgkitError } from "./errors.ts";
-import { CATEGORIES, normalizeMapping, type Category } from "./mapping.ts";
+import { normalizeRules, type Condition, type PersonaRule, type Rules } from "./rules.ts";
 
 const REASON_LIMIT = 5;
-const SUPPORTS: Record<string, Set<string>> = {
-  champion: new Set(["invite_sent"]),
-  power_user: new Set(["core_action"]),
-  blocked: new Set(CATEGORIES),
-  implementer: new Set(["setup_step"]),
-  evaluator: new Set(CATEGORIES),
-  unknown: new Set(),
-};
 
-export type Reason = { action: string; category: Category; occurred_at: string };
+export type Reason =
+  | { kind: "event"; action: string; occurred_at: string }
+  | { kind: "trait"; key: string; equals: string };
 
 export type PersonaResult = {
   user_id: string;
   persona: string;
-  reasons: Reason[];
-  counts: Record<Category, number>;
   matched: string[];
+  reasons: Reason[];
   calculated_at: string;
 };
 
-type Counted = { action: string; category: Category; occurredAt: Date; seq: number };
+type Prepared = { action: string; occurredAt: Date; seq: number };
 
 export function judge(
   userId: unknown,
   events: unknown,
-  options: { mapping?: unknown; policy?: unknown; now?: string | null } = {},
+  traits: unknown = {},
+  rules: unknown = { groups: {}, personas: [] },
+  now?: string | null,
 ): PersonaResult {
   const id = requireText(userId, "user_id");
-  const moment = options.now != null ? parseTime(options.now) : new Date();
-  const rules = normalizePolicy(options.policy ?? null);
-  const categories = normalizeMapping(options.mapping ?? null);
-  const counted = inWindow(events, categories, moment, rules.lookback_days);
-  const counts = emptyCounts();
-  for (const event of counted) counts[event.category] += 1;
-  const newest = counted.length > 0 ? counted[counted.length - 1]!.occurredAt : null;
-  const silenceAt = new Date(moment.getTime() - rules.silence_days * 86_400_000);
-  const quiet = newest !== null && newest.getTime() <= silenceAt.getTime();
-  const started = counts.setup_step >= 1 || counts.core_action >= 1;
+  const moment = now != null ? parseTime(now) : new Date();
+  const normalized: Rules = normalizeRules(rules);
+  const stored = readTraits(traits);
+  const prepared = prepareEvents(events);
+  const ordered = [...normalized.personas].sort((a, b) => a.priority - b.priority || a.order - b.order);
   const matched: string[] = [];
-  if (counts.invite_sent >= rules.champion_min) matched.push("champion");
-  if (counts.core_action >= rules.power_user_min) matched.push("power_user");
-  if (started && quiet) matched.push("blocked");
-  if (counts.setup_step >= rules.implementer_min) matched.push("implementer");
-  if (counted.length > 0) matched.push("evaluator");
-  const personaName = matched[0] ?? "unknown";
+  let winner: PersonaRule | null = null;
+  for (const persona of ordered) {
+    if (matches(persona, prepared, stored, moment)) {
+      matched.push(persona.name);
+      if (!winner) winner = persona;
+    }
+  }
   return {
     user_id: id,
-    persona: personaName,
-    reasons: reasons(counted, personaName),
-    counts,
+    persona: winner ? winner.name : "",
     matched,
+    reasons: winner ? reasonsFor(winner, prepared, stored, moment) : [],
     calculated_at: formatTime(moment),
   };
 }
@@ -84,52 +73,91 @@ export function requireText(value: unknown, name: string): string {
   return value.trim();
 }
 
-function emptyCounts(): Record<Category, number> {
-  return { core_action: 0, invite_sent: 0, setup_step: 0 };
+function matches(persona: PersonaRule, events: Prepared[], traits: Record<string, string>, moment: Date): boolean {
+  for (const condition of persona.require_all) {
+    if (!holds(condition, events, traits, moment)) return false;
+  }
+  if (persona.require_one_of.length > 0) {
+    if (!persona.require_one_of.some((condition) => holds(condition, events, traits, moment))) return false;
+  }
+  for (const condition of persona.exclude) {
+    if (holds(condition, events, traits, moment)) return false;
+  }
+  return true;
 }
 
-function inWindow(events: unknown, mapping: Record<string, Category>, moment: Date, lookbackDays: number): Counted[] {
+function holds(condition: Condition, events: Prepared[], traits: Record<string, string>, moment: Date): boolean {
+  if (condition.kind === "trait") return traits[condition.key] === condition.equals;
+  const count = counted(condition, events, moment).length;
+  if (count < condition.at_least) return false;
+  if (condition.at_most != null && count > condition.at_most) return false;
+  return true;
+}
+
+function counted(condition: Extract<Condition, { kind: "count" }>, events: Prepared[], moment: Date): Prepared[] {
+  const start = moment.getTime() - condition.within_days * 86_400_000;
+  const end = moment.getTime();
+  const actions = new Set(condition.actions);
+  return events.filter((event) => actions.has(event.action) && event.occurredAt.getTime() >= start && event.occurredAt.getTime() <= end);
+}
+
+function reasonsFor(persona: PersonaRule, events: Prepared[], traits: Record<string, string>, moment: Date): Reason[] {
+  const supporting = [...persona.require_all, ...persona.require_one_of].filter((condition) =>
+    holds(condition, events, traits, moment),
+  );
+  const seen = new Set<string>();
+  const chosen: Prepared[] = [];
+  for (const condition of supporting) {
+    if (condition.kind !== "count") continue;
+    for (const event of counted(condition, events, moment)) {
+      const key = `${event.occurredAt.getTime()}\0${event.action}\0${event.seq}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      chosen.push(event);
+    }
+  }
+  chosen.sort((a, b) => {
+    const time = b.occurredAt.getTime() - a.occurredAt.getTime();
+    if (time !== 0) return time;
+    if (a.action !== b.action) return a.action < b.action ? 1 : -1;
+    return b.seq - a.seq;
+  });
+  const reasons: Reason[] = chosen.map((event) => ({
+    kind: "event",
+    action: event.action,
+    occurred_at: formatTime(event.occurredAt),
+  }));
+  for (const condition of supporting) {
+    if (condition.kind === "trait") reasons.push({ kind: "trait", key: condition.key, equals: condition.equals });
+  }
+  return reasons.slice(0, REASON_LIMIT);
+}
+
+function prepareEvents(events: unknown): Prepared[] {
   const list = events ?? [];
   if (!Array.isArray(list)) throw new PlgkitError("events must be a list.");
-  const start = moment.getTime() - lookbackDays * 86_400_000;
-  const end = moment.getTime();
-  const counted: Counted[] = [];
-  list.forEach((event, index) => {
+  return list.map((event, index) => {
     if (typeof event !== "object" || event === null || Array.isArray(event)) {
       throw new PlgkitError("each event must be an object.");
     }
-    const actionRaw = (event as { action?: unknown }).action;
-    if (typeof actionRaw !== "string" || actionRaw.trim() === "") {
-      throw new PlgkitError("each event needs an action.");
-    }
-    const action = actionRaw.trim();
-    const category = mapping[action];
-    if (!category || !CATEGORIES.includes(category)) return;
-    const occurredAt = parseTime((event as { occurred_at?: unknown }).occurred_at);
-    const millis = occurredAt.getTime();
-    if (millis < start || millis > end) return;
-    counted.push({ action, category, occurredAt, seq: index });
+    const action = (event as { action?: unknown }).action;
+    if (typeof action !== "string" || action.trim() === "") throw new PlgkitError("each event needs an action.");
+    return {
+      action: action.trim(),
+      occurredAt: parseTime((event as { occurred_at?: unknown }).occurred_at),
+      seq: index,
+    };
   });
-  counted.sort((a, b) => compare(a, b));
-  return counted;
 }
 
-function reasons(counted: Counted[], personaName: string): Reason[] {
-  const supported = counted.filter((event) => SUPPORTS[personaName]?.has(event.category));
-  supported.sort((a, b) => compare(b, a));
-  return supported.slice(0, REASON_LIMIT).map((event) => ({
-    action: event.action,
-    category: event.category,
-    occurred_at: formatTime(event.occurredAt),
-  }));
+function readTraits(traits: unknown): Record<string, string> {
+  if (traits == null) return {};
+  if (typeof traits !== "object" || Array.isArray(traits)) throw new PlgkitError("traits must be an object of strings.");
+  const cleaned: Record<string, string> = {};
+  for (const [key, value] of Object.entries(traits)) {
+    if (key.trim() === "") throw new PlgkitError("trait keys must be non-empty strings.");
+    if (typeof value !== "string") throw new PlgkitError("trait values must be strings.");
+    cleaned[key.trim()] = value;
+  }
+  return cleaned;
 }
-
-function compare(a: Counted, b: Counted): number {
-  const time = a.occurredAt.getTime() - b.occurredAt.getTime();
-  if (time !== 0) return time;
-  if (a.action < b.action) return -1;
-  if (a.action > b.action) return 1;
-  return a.seq - b.seq;
-}
-
-export type { Policy };

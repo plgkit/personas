@@ -1,11 +1,11 @@
-"""Audience checks follow the persona label. They do not import nudges."""
+"""Audience checks read the stored persona. They do not import nudges."""
 
 import importlib.util
 import json
 import unittest
 from pathlib import Path
 
-from plgkit_personas import connect, migrate, track
+from plgkit_personas import calculate, connect, migrate, track
 
 ROOT = Path(__file__).resolve().parents[3]
 FIXTURE = json.loads((ROOT / "spec" / "fixtures" / "cases.json").read_text(encoding="utf-8"))
@@ -35,47 +35,31 @@ class AudienceTests(unittest.TestCase):
                 "20261110150401-home-champion-invite": "Bring in the person you invited.",
             },
         )
-        self.assertEqual(
-            loaded[0]["audience"]["require_all"],
-            ["persona_is_blocked"],
-        )
-        self.assertEqual(
-            loaded[1]["audience"]["require_all"],
-            ["persona_is_champion"],
-        )
 
-    def test_checks_follow_the_label(self):
+    def test_checks_follow_the_stored_winner(self):
         for case in FIXTURE["cases"]:
+            if case["name"] not in ("avery_blocked", "blake_champion", "developer_member", "empty"):
+                continue
             db = connect("sqlite:///:memory:")
             migrate(db)
             now = case["calculated_at"]
             for event in case["events"]:
-                stored = track(
-                    case["user_id"],
-                    event["action"],
-                    {"occurred_at": event["occurred_at"]},
-                    db=db,
-                    now=now,
-                )
-                self.assertTrue(stored, case["name"])
-            checks = self.audiences.bind(
-                db=db,
-                now=now,
-                mapping=FIXTURE["mapping"],
-                policy=FIXTURE["config"],
-            )
+                track(case["user_id"], event["action"], {"occurred_at": event["occurred_at"]}, db=db, now=now)
+            calculate(db=db, now=now, user_id=case["user_id"], rules=FIXTURE["rules"])
+            checks = self.audiences.bind(db=db)
             ctx = {"user": {"id": case["user_id"]}}
             self.assertEqual(checks["persona_is_blocked"](ctx), case["persona"] == "blocked", case["name"])
             self.assertEqual(checks["persona_is_champion"](ctx), case["persona"] == "champion", case["name"])
 
-    def test_attribute_context_and_sample_files(self):
+    def test_attribute_context(self):
         case = next(item for item in FIXTURE["cases"] if item["name"] == "avery_blocked")
         db = connect("sqlite:///:memory:")
         migrate(db)
         now = case["calculated_at"]
         for event in case["events"]:
             track(case["user_id"], event["action"], {"occurred_at": event["occurred_at"]}, db=db, now=now)
-        checks = self.audiences.bind(db=db, now=now)
+        calculate(db=db, now=now, rules=FIXTURE["rules"])
+        checks = self.audiences.bind(db=db)
 
         class User:
             id = "avery"
@@ -86,7 +70,6 @@ class AudienceTests(unittest.TestCase):
         self.assertTrue(checks["persona_is_blocked"](Context()))
         self.assertFalse(checks["persona_is_champion"](Context()))
         self.assertFalse(checks["persona_is_blocked"]({}))
-        self.assertFalse(checks["persona_is_champion"]({}))
 
 
 if __name__ == "__main__":

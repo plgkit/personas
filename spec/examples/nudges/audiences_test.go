@@ -31,16 +31,15 @@ func TestMessages(t *testing.T) {
 	}
 }
 
-func TestAudiencesFollowTheLabel(t *testing.T) {
+func TestAudiencesFollowTheStoredWinner(t *testing.T) {
 	root := repoRoot(t)
 	raw, err := os.ReadFile(filepath.Join(root, "spec", "fixtures", "cases.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	var fixture struct {
-		Mapping map[string]string `json:"mapping"`
-		Config  map[string]any    `json:"config"`
-		Cases   []struct {
+		Rules json.RawMessage `json:"rules"`
+		Cases []struct {
 			Name         string           `json:"name"`
 			UserID       string           `json:"user_id"`
 			Persona      string           `json:"persona"`
@@ -51,7 +50,20 @@ func TestAudiencesFollowTheLabel(t *testing.T) {
 	if err := json.Unmarshal(raw, &fixture); err != nil {
 		t.Fatal(err)
 	}
+	var parsed any
+	if err := json.Unmarshal(fixture.Rules, &parsed); err != nil {
+		t.Fatal(err)
+	}
+	rules, err := plgkit.NormalizeRules(parsed)
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, item := range fixture.Cases {
+		switch item.Name {
+		case "avery_blocked", "blake_champion", "developer_member", "empty":
+		default:
+			continue
+		}
 		db, err := plgkit.Connect("sqlite:///:memory:")
 		if err != nil {
 			t.Fatal(err)
@@ -67,7 +79,10 @@ func TestAudiencesFollowTheLabel(t *testing.T) {
 				t.Fatalf("%s %s %v", item.Name, action, err)
 			}
 		}
-		checks := Bind(db, item.CalculatedAt, fixture.Mapping, fixture.Config)
+		if _, err := plgkit.Calculate(db, item.CalculatedAt, item.UserID, &rules); err != nil {
+			t.Fatal(item.Name, err)
+		}
+		checks := Bind(db)
 		ctx := map[string]any{"user": map[string]any{"id": item.UserID}}
 		if checks["persona_is_blocked"](ctx) != (item.Persona == "blocked") {
 			t.Fatalf("%s blocked check", item.Name)
@@ -77,53 +92,6 @@ func TestAudiencesFollowTheLabel(t *testing.T) {
 		}
 		db.Close()
 	}
-}
-
-func TestSampleFiles(t *testing.T) {
-	root := repoRoot(t)
-	raw, err := os.ReadFile(filepath.Join(root, "spec", "fixtures", "cases.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var fixture struct {
-		Cases []struct {
-			Name         string           `json:"name"`
-			UserID       string           `json:"user_id"`
-			Persona      string           `json:"persona"`
-			CalculatedAt string           `json:"calculated_at"`
-			Events       []map[string]any `json:"events"`
-		} `json:"cases"`
-	}
-	if err := json.Unmarshal(raw, &fixture); err != nil {
-		t.Fatal(err)
-	}
-	for _, item := range fixture.Cases {
-		if item.Name == "avery_blocked" {
-			copy := item
-			db, err := plgkit.Connect("sqlite:///:memory:")
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer db.Close()
-			if err := plgkit.Migrate(db); err != nil {
-				t.Fatal(err)
-			}
-			for _, event := range copy.Events {
-				action, _ := event["action"].(string)
-				occurred, _ := event["occurred_at"].(string)
-				if _, err := plgkit.Track(copy.UserID, action, map[string]any{"occurred_at": occurred}, db, copy.CalculatedAt); err != nil {
-					t.Fatal(err)
-				}
-			}
-			checks := Bind(db, copy.CalculatedAt, nil, nil)
-			ctx := map[string]any{"user": map[string]any{"id": copy.UserID}}
-			if !checks["persona_is_blocked"](ctx) || checks["persona_is_champion"](ctx) {
-				t.Fatal("sample mapping did not mark Avery blocked")
-			}
-			return
-		}
-	}
-	t.Fatal("missing avery")
 }
 
 func repoRoot(t *testing.T) string {

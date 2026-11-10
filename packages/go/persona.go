@@ -2,34 +2,33 @@ package plgkit
 
 import "database/sql"
 
-func Persona(userID string, db *sql.DB, now string, mapping map[string]string, policy map[string]any) (Result, error) {
+func Persona(userID string, db *sql.DB) (Result, error) {
 	id, err := requireText(userID, "user_id")
 	if err != nil {
 		return Result{}, err
 	}
-	if mapping == nil {
-		mapping, err = LoadMapping("")
-		if err != nil {
-			return Result{}, err
-		}
-	}
-	if policy == nil {
-		loaded, err := LoadPolicy("")
-		if err != nil {
-			return Result{}, err
-		}
-		policy = map[string]any{}
-		for key, value := range loaded {
-			policy[key] = value
-		}
-	}
-	database, err := ensureDB(db)
+	db, err = ensureDB(db)
 	if err != nil {
 		return Result{}, err
 	}
-	events, err := listEvents(database, id)
+	row, err := readSnapshot(db, id)
 	if err != nil {
-		return Result{}, err
+		return Result{}, fail("Could not read the persona. Run plgkit-personas migrate.")
 	}
-	return Judge(id, events, mapping, policy, now)
+	if row == nil {
+		return Result{UserID: id, Persona: "", Matched: []string{}, Reasons: []Reason{}, CalculatedAt: ""}, nil
+	}
+	return *row, nil
+}
+
+func PersonaIs(userID, name string, db *sql.DB) (bool, error) {
+	personaName, err := requireText(name, "persona")
+	if err != nil {
+		return false, err
+	}
+	result, err := Persona(userID, db)
+	if err != nil {
+		return false, err
+	}
+	return result.Persona == personaName, nil
 }

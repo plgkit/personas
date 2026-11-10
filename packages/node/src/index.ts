@@ -1,9 +1,10 @@
-/** PLGKit personas: save product events and judge one persona per user. */
-export { DEFAULT_POLICY, loadPolicy, normalizePolicy, type Policy } from "./config.ts";
+/** PLGKit personas: save events and traits, then calculate a persona you defined. */
+export { calculate } from "./calculate.ts";
 export { PlgkitError } from "./errors.ts";
+export { identify } from "./identify.ts";
 export { judge, type PersonaResult, type Reason } from "./judge.ts";
-export { loadMapping } from "./mapping.ts";
-export { persona } from "./persona.ts";
+export { persona, personaIs } from "./persona.ts";
+export { loadRules, normalizeRules, type Rules } from "./rules.ts";
 export {
   DEFAULT_DATABASE_URL,
   DEFAULT_DATABASE_URL_ENV,

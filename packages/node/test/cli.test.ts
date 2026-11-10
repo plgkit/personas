@@ -34,3 +34,25 @@ test("migrate creates the table", () => {
   assert.equal(row?.name, "plgkit_persona_events");
   db.close();
 });
+
+test("calculate assigns a catch-all persona", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "plgkit-personas-"));
+  const database = path.join(dir, "events.sqlite");
+  fs.mkdirSync(path.join(dir, "plgkit", "personas"), { recursive: true });
+  fs.writeFileSync(path.join(dir, "plgkit", "personas", "personas.yml"), "personas:\n  - name: everyone\n    priority: 1\n");
+  const env = {
+    ...process.env,
+    PLGKIT_DATABASE_URL: `sqlite:///${database}`,
+  };
+  delete env.PLGKIT_PERSONA_MIGRATIONS_DIR;
+  const args = ["--disable-warning=ExperimentalWarning", "--experimental-strip-types", cli];
+  const migrated = spawnSync(process.execPath, [...args, "migrate"], { cwd: dir, env, encoding: "utf8" });
+  assert.equal(migrated.status, 0, migrated.stderr);
+  const calculated = spawnSync(process.execPath, [...args, "calculate", "--user", "ada", "--now", "2026-11-10T15:00:00Z"], {
+    cwd: dir,
+    env,
+    encoding: "utf8",
+  });
+  assert.equal(calculated.status, 0, calculated.stderr);
+  assert.match(calculated.stdout, /Calculated 1 users\. 1 assigned\. 0 unmatched\./);
+});

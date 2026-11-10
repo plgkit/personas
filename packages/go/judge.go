@@ -2,44 +2,36 @@ package plgkit
 
 import (
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
 
 const reasonLimit = 5
 
-var supports = map[string]map[string]bool{
-	"champion":    {"invite_sent": true},
-	"power_user":  {"core_action": true},
-	"blocked":     {"core_action": true, "invite_sent": true, "setup_step": true},
-	"implementer": {"setup_step": true},
-	"evaluator":   {"core_action": true, "invite_sent": true, "setup_step": true},
-	"unknown":     {},
-}
-
 type Reason struct {
-	Action     string `json:"action"`
-	Category   string `json:"category"`
-	OccurredAt string `json:"occurred_at"`
+	Kind       string `json:"kind"`
+	Action     string `json:"action,omitempty"`
+	OccurredAt string `json:"occurred_at,omitempty"`
+	Key        string `json:"key,omitempty"`
+	Equals     string `json:"equals,omitempty"`
 }
 
 type Result struct {
-	UserID       string         `json:"user_id"`
-	Persona      string         `json:"persona"`
-	Reasons      []Reason       `json:"reasons"`
-	Counts       map[string]int `json:"counts"`
-	Matched      []string       `json:"matched"`
-	CalculatedAt string         `json:"calculated_at"`
+	UserID       string   `json:"user_id"`
+	Persona      string   `json:"persona"`
+	Matched      []string `json:"matched"`
+	Reasons      []Reason `json:"reasons"`
+	CalculatedAt string   `json:"calculated_at"`
 }
 
-type countedEvent struct {
+type preparedEvent struct {
 	action     string
-	category   string
 	occurredAt time.Time
 	seq        int
 }
 
-func Judge(userID string, events []map[string]any, mapping map[string]string, policy map[string]any, now string) (Result, error) {
+func Judge(userID string, events []map[string]any, traits map[string]string, rules Rules, now string) (Result, error) {
 	id, err := requireText(userID, "user_id")
 	if err != nil {
 		return Result{}, err
@@ -53,56 +45,42 @@ func Judge(userID string, events []map[string]any, mapping map[string]string, po
 			return Result{}, err
 		}
 	}
-	rules, err := NormalizePolicy(policy)
+	stored := map[string]string{}
+	for key, value := range traits {
+		stored[strings.TrimSpace(key)] = value
+	}
+	prepared, err := prepareEvents(events)
 	if err != nil {
 		return Result{}, err
 	}
-	categories, err := NormalizeMapping(mapping)
-	if err != nil {
-		return Result{}, err
-	}
-	counted, err := inWindow(events, categories, moment, rules["lookback_days"])
-	if err != nil {
-		return Result{}, err
-	}
-	counts := map[string]int{"core_action": 0, "invite_sent": 0, "setup_step": 0}
-	for _, event := range counted {
-		counts[event.category]++
-	}
-	var newest time.Time
-	hasNewest := len(counted) > 0
-	if hasNewest {
-		newest = counted[len(counted)-1].occurredAt
-	}
-	silenceAt := moment.Add(-time.Duration(rules["silence_days"]) * 24 * time.Hour)
-	quiet := hasNewest && !newest.After(silenceAt)
-	started := counts["setup_step"] >= 1 || counts["core_action"] >= 1
+	ordered := append([]PersonaRule{}, rules.Personas...)
+	sort.Slice(ordered, func(i, j int) bool {
+		if ordered[i].Priority != ordered[j].Priority {
+			return ordered[i].Priority < ordered[j].Priority
+		}
+		return ordered[i].Order < ordered[j].Order
+	})
 	matched := []string{}
-	if counts["invite_sent"] >= rules["champion_min"] {
-		matched = append(matched, "champion")
+	var winner *PersonaRule
+	for i := range ordered {
+		if matches(&ordered[i], prepared, stored, moment) {
+			matched = append(matched, ordered[i].Name)
+			if winner == nil {
+				winner = &ordered[i]
+			}
+		}
 	}
-	if counts["core_action"] >= rules["power_user_min"] {
-		matched = append(matched, "power_user")
-	}
-	if started && quiet {
-		matched = append(matched, "blocked")
-	}
-	if counts["setup_step"] >= rules["implementer_min"] {
-		matched = append(matched, "implementer")
-	}
-	if len(counted) > 0 {
-		matched = append(matched, "evaluator")
-	}
-	personaName := "unknown"
-	if len(matched) > 0 {
-		personaName = matched[0]
+	reasons := []Reason{}
+	personaName := ""
+	if winner != nil {
+		personaName = winner.Name
+		reasons = reasonsFor(winner, prepared, stored, moment)
 	}
 	return Result{
 		UserID:       id,
 		Persona:      personaName,
-		Reasons:      reasonList(counted, personaName),
-		Counts:       counts,
 		Matched:      matched,
+		Reasons:      reasons,
 		CalculatedAt: FormatTime(moment),
 	}, nil
 }
@@ -142,19 +120,114 @@ func hasZone(text string) bool {
 		return false
 	}
 	tail := text[len(text)-6:]
-	if len(tail) == 6 && (tail[0] == '+' || tail[0] == '-') && tail[3] == ':' {
-		return true
-	}
-	return false
+	return (tail[0] == '+' || tail[0] == '-') && tail[3] == ':'
 }
 
-func inWindow(events []map[string]any, mapping map[string]string, moment time.Time, lookbackDays int) ([]countedEvent, error) {
+func matches(persona *PersonaRule, events []preparedEvent, traits map[string]string, moment time.Time) bool {
+	for i := range persona.RequireAll {
+		if !holds(&persona.RequireAll[i], events, traits, moment) {
+			return false
+		}
+	}
+	if len(persona.RequireOneOf) > 0 {
+		anyTrue := false
+		for i := range persona.RequireOneOf {
+			if holds(&persona.RequireOneOf[i], events, traits, moment) {
+				anyTrue = true
+				break
+			}
+		}
+		if !anyTrue {
+			return false
+		}
+	}
+	for i := range persona.Exclude {
+		if holds(&persona.Exclude[i], events, traits, moment) {
+			return false
+		}
+	}
+	return true
+}
+
+func holds(condition *Condition, events []preparedEvent, traits map[string]string, moment time.Time) bool {
+	if condition.Kind == "trait" {
+		return traits[condition.Key] == condition.Equals
+	}
+	count := len(counted(condition, events, moment))
+	if count < condition.AtLeast {
+		return false
+	}
+	if condition.AtMost != nil && count > *condition.AtMost {
+		return false
+	}
+	return true
+}
+
+func counted(condition *Condition, events []preparedEvent, moment time.Time) []preparedEvent {
+	start := moment.Add(-time.Duration(condition.WithinDays) * 24 * time.Hour)
+	actions := map[string]bool{}
+	for _, action := range condition.Actions {
+		actions[action] = true
+	}
+	found := []preparedEvent{}
+	for _, event := range events {
+		if !actions[event.action] {
+			continue
+		}
+		if event.occurredAt.Before(start) || event.occurredAt.After(moment) {
+			continue
+		}
+		found = append(found, event)
+	}
+	return found
+}
+
+func reasonsFor(persona *PersonaRule, events []preparedEvent, traits map[string]string, moment time.Time) []Reason {
+	supporting := []Condition{}
+	for _, condition := range append(append([]Condition{}, persona.RequireAll...), persona.RequireOneOf...) {
+		copy := condition
+		if holds(&copy, events, traits, moment) {
+			supporting = append(supporting, condition)
+		}
+	}
+	seen := map[string]bool{}
+	chosen := []preparedEvent{}
+	for i := range supporting {
+		if supporting[i].Kind != "count" {
+			continue
+		}
+		for _, event := range counted(&supporting[i], events, moment) {
+			key := FormatTime(event.occurredAt) + "\x00" + event.action + "\x00" + strconv.Itoa(event.seq)
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			chosen = append(chosen, event)
+		}
+	}
+	sort.Slice(chosen, func(i, j int) bool {
+		return lessPrepared(chosen[j], chosen[i])
+	})
+	reasons := []Reason{}
+	for _, event := range chosen {
+		reasons = append(reasons, Reason{Kind: "event", Action: event.action, OccurredAt: FormatTime(event.occurredAt)})
+	}
+	for _, condition := range supporting {
+		if condition.Kind == "trait" {
+			reasons = append(reasons, Reason{Kind: "trait", Key: condition.Key, Equals: condition.Equals})
+		}
+	}
+	if len(reasons) > reasonLimit {
+		reasons = reasons[:reasonLimit]
+	}
+	return reasons
+}
+
+func prepareEvents(events []map[string]any) ([]preparedEvent, error) {
 	if events == nil {
 		events = []map[string]any{}
 	}
-	start := moment.Add(-time.Duration(lookbackDays) * 24 * time.Hour)
-	allowed := categorySet()
-	var counted []countedEvent
+	prepared := []preparedEvent{}
 	for index, event := range events {
 		if event == nil {
 			return nil, fail("each event must be an object.")
@@ -163,52 +236,16 @@ func inWindow(events []map[string]any, mapping map[string]string, moment time.Ti
 		if !ok || strings.TrimSpace(action) == "" {
 			return nil, fail("each event needs an action.")
 		}
-		action = strings.TrimSpace(action)
-		category := mapping[action]
-		if !allowed[category] {
-			continue
-		}
 		occurredAt, err := ParseTime(event["occurred_at"])
 		if err != nil {
 			return nil, err
 		}
-		if occurredAt.Before(start) || occurredAt.After(moment) {
-			continue
-		}
-		counted = append(counted, countedEvent{action: action, category: category, occurredAt: occurredAt, seq: index})
+		prepared = append(prepared, preparedEvent{action: strings.TrimSpace(action), occurredAt: occurredAt, seq: index})
 	}
-	sort.Slice(counted, func(i, j int) bool {
-		return lessEvent(counted[i], counted[j])
-	})
-	return counted, nil
+	return prepared, nil
 }
 
-func reasonList(counted []countedEvent, personaName string) []Reason {
-	allowed := supports[personaName]
-	var supported []countedEvent
-	for _, event := range counted {
-		if allowed[event.category] {
-			supported = append(supported, event)
-		}
-	}
-	sort.Slice(supported, func(i, j int) bool {
-		return lessEvent(supported[j], supported[i])
-	})
-	if len(supported) > reasonLimit {
-		supported = supported[:reasonLimit]
-	}
-	reasons := []Reason{}
-	for _, event := range supported {
-		reasons = append(reasons, Reason{
-			Action:     event.action,
-			Category:   event.category,
-			OccurredAt: FormatTime(event.occurredAt),
-		})
-	}
-	return reasons
-}
-
-func lessEvent(a, b countedEvent) bool {
+func lessPrepared(a, b preparedEvent) bool {
 	if !a.occurredAt.Equal(b.occurredAt) {
 		return a.occurredAt.Before(b.occurredAt)
 	}

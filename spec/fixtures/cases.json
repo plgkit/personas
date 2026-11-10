@@ -1,23 +1,377 @@
 {
   "note": "Shared expected results for Python, TypeScript, and Go. Times are UTC.",
   "calculated_at": "2026-11-10T15:00:00.000000Z",
-  "config": {
-    "lookback_days": 14,
-    "silence_days": 7,
-    "champion_min": 1,
-    "power_user_min": 8,
-    "implementer_min": 2
-  },
-  "mapping": {
-    "created_doc": "core_action",
-    "edited_doc": "core_action",
-    "sent_invite": "invite_sent",
-    "copied_invite_link": "invite_sent",
-    "connected_slack": "setup_step",
-    "created_workspace": "setup_step",
-    "picked_template": "setup_step"
+  "rules": {
+    "groups": {
+      "app_use": [
+        "app_opened",
+        "session_started"
+      ],
+      "setup": [
+        "connected_slack",
+        "created_workspace",
+        "picked_template"
+      ],
+      "invites": [
+        "sent_invite",
+        "copied_invite_link"
+      ],
+      "product": [
+        "connected_slack",
+        "created_workspace",
+        "picked_template",
+        "created_doc",
+        "edited_doc",
+        "sent_invite",
+        "copied_invite_link",
+        "app_opened",
+        "session_started"
+      ]
+    },
+    "personas": [
+      {
+        "name": "developer",
+        "priority": 1,
+        "require_all": [
+          {
+            "count": {
+              "group": "app_use",
+              "at_least": 3,
+              "within_days": 3
+            }
+          }
+        ],
+        "exclude": [
+          {
+            "trait": {
+              "key": "role",
+              "equals": "billing_admin"
+            }
+          }
+        ]
+      },
+      {
+        "name": "billing_admin",
+        "priority": 2,
+        "require_all": [
+          {
+            "trait": {
+              "key": "role",
+              "equals": "billing_admin"
+            }
+          }
+        ]
+      },
+      {
+        "name": "champion",
+        "priority": 3,
+        "require_all": [
+          {
+            "count": {
+              "group": "invites",
+              "at_least": 1,
+              "within_days": 14
+            }
+          }
+        ]
+      },
+      {
+        "name": "blocked",
+        "priority": 4,
+        "require_all": [
+          {
+            "count": {
+              "group": "setup",
+              "at_least": 1,
+              "within_days": 14
+            }
+          }
+        ],
+        "exclude": [
+          {
+            "count": {
+              "group": "product",
+              "at_least": 1,
+              "within_days": 7
+            }
+          }
+        ]
+      },
+      {
+        "name": "member",
+        "priority": 5,
+        "require_all": [
+          {
+            "trait": {
+              "key": "role",
+              "equals": "member"
+            }
+          }
+        ]
+      }
+    ]
   },
   "cases": [
+    {
+      "name": "developer_member",
+      "user_id": "dev",
+      "events": [
+        {
+          "action": "app_opened",
+          "occurred_at": "2026-11-08T15:00:00Z"
+        },
+        {
+          "action": "session_started",
+          "occurred_at": "2026-11-09T15:00:00Z"
+        },
+        {
+          "action": "app_opened",
+          "occurred_at": "2026-11-10T12:00:00Z"
+        }
+      ],
+      "traits": {
+        "role": "member"
+      },
+      "persona": "developer",
+      "matched": [
+        "developer",
+        "member"
+      ],
+      "reasons": [
+        {
+          "kind": "event",
+          "action": "app_opened",
+          "occurred_at": "2026-11-10T12:00:00.000000Z"
+        },
+        {
+          "kind": "event",
+          "action": "session_started",
+          "occurred_at": "2026-11-09T15:00:00.000000Z"
+        },
+        {
+          "kind": "event",
+          "action": "app_opened",
+          "occurred_at": "2026-11-08T15:00:00.000000Z"
+        }
+      ],
+      "calculated_at": "2026-11-10T15:00:00.000000Z"
+    },
+    {
+      "name": "developer_no_role",
+      "user_id": "dev_open",
+      "events": [
+        {
+          "action": "app_opened",
+          "occurred_at": "2026-11-08T15:00:00Z"
+        },
+        {
+          "action": "app_opened",
+          "occurred_at": "2026-11-09T15:00:00Z"
+        },
+        {
+          "action": "app_opened",
+          "occurred_at": "2026-11-10T12:00:00Z"
+        }
+      ],
+      "traits": {},
+      "persona": "developer",
+      "matched": [
+        "developer"
+      ],
+      "reasons": [
+        {
+          "kind": "event",
+          "action": "app_opened",
+          "occurred_at": "2026-11-10T12:00:00.000000Z"
+        },
+        {
+          "kind": "event",
+          "action": "app_opened",
+          "occurred_at": "2026-11-09T15:00:00.000000Z"
+        },
+        {
+          "kind": "event",
+          "action": "app_opened",
+          "occurred_at": "2026-11-08T15:00:00.000000Z"
+        }
+      ],
+      "calculated_at": "2026-11-10T15:00:00.000000Z"
+    },
+    {
+      "name": "billing_admin_active",
+      "user_id": "ada",
+      "events": [
+        {
+          "action": "app_opened",
+          "occurred_at": "2026-11-08T15:00:00Z"
+        },
+        {
+          "action": "app_opened",
+          "occurred_at": "2026-11-09T15:00:00Z"
+        },
+        {
+          "action": "app_opened",
+          "occurred_at": "2026-11-10T12:00:00Z"
+        }
+      ],
+      "traits": {
+        "role": "billing_admin"
+      },
+      "persona": "billing_admin",
+      "matched": [
+        "billing_admin"
+      ],
+      "reasons": [
+        {
+          "kind": "trait",
+          "key": "role",
+          "equals": "billing_admin"
+        }
+      ],
+      "calculated_at": "2026-11-10T15:00:00.000000Z"
+    },
+    {
+      "name": "billing_admin_only",
+      "user_id": "sam",
+      "events": [],
+      "traits": {
+        "role": "billing_admin"
+      },
+      "persona": "billing_admin",
+      "matched": [
+        "billing_admin"
+      ],
+      "reasons": [
+        {
+          "kind": "trait",
+          "key": "role",
+          "equals": "billing_admin"
+        }
+      ],
+      "calculated_at": "2026-11-10T15:00:00.000000Z"
+    },
+    {
+      "name": "member_only",
+      "user_id": "pat",
+      "events": [
+        {
+          "action": "app_opened",
+          "occurred_at": "2026-11-10T12:00:00Z"
+        }
+      ],
+      "traits": {
+        "role": "member"
+      },
+      "persona": "member",
+      "matched": [
+        "member"
+      ],
+      "reasons": [
+        {
+          "kind": "trait",
+          "key": "role",
+          "equals": "member"
+        }
+      ],
+      "calculated_at": "2026-11-10T15:00:00.000000Z"
+    },
+    {
+      "name": "opens_too_old",
+      "user_id": "old_dev",
+      "events": [
+        {
+          "action": "app_opened",
+          "occurred_at": "2026-11-07T14:59:59Z"
+        },
+        {
+          "action": "app_opened",
+          "occurred_at": "2026-11-09T15:00:00Z"
+        },
+        {
+          "action": "app_opened",
+          "occurred_at": "2026-11-10T12:00:00Z"
+        }
+      ],
+      "traits": {
+        "role": "member"
+      },
+      "persona": "member",
+      "matched": [
+        "member"
+      ],
+      "reasons": [
+        {
+          "kind": "trait",
+          "key": "role",
+          "equals": "member"
+        }
+      ],
+      "calculated_at": "2026-11-10T15:00:00.000000Z"
+    },
+    {
+      "name": "exactly_3_days",
+      "user_id": "edge3",
+      "events": [
+        {
+          "action": "app_opened",
+          "occurred_at": "2026-11-07T15:00:00Z"
+        },
+        {
+          "action": "session_started",
+          "occurred_at": "2026-11-07T15:00:00Z"
+        },
+        {
+          "action": "app_opened",
+          "occurred_at": "2026-11-07T15:00:00Z"
+        }
+      ],
+      "traits": {},
+      "persona": "developer",
+      "matched": [
+        "developer"
+      ],
+      "reasons": [
+        {
+          "kind": "event",
+          "action": "session_started",
+          "occurred_at": "2026-11-07T15:00:00.000000Z"
+        },
+        {
+          "kind": "event",
+          "action": "app_opened",
+          "occurred_at": "2026-11-07T15:00:00.000000Z"
+        },
+        {
+          "kind": "event",
+          "action": "app_opened",
+          "occurred_at": "2026-11-07T15:00:00.000000Z"
+        }
+      ],
+      "calculated_at": "2026-11-10T15:00:00.000000Z"
+    },
+    {
+      "name": "future_ignored",
+      "user_id": "future",
+      "events": [
+        {
+          "action": "app_opened",
+          "occurred_at": "2026-11-10T12:00:00Z"
+        },
+        {
+          "action": "app_opened",
+          "occurred_at": "2026-11-10T13:00:00Z"
+        },
+        {
+          "action": "app_opened",
+          "occurred_at": "2026-11-10T16:00:00Z"
+        }
+      ],
+      "traits": {},
+      "persona": "",
+      "matched": [],
+      "reasons": [],
+      "calculated_at": "2026-11-10T15:00:00.000000Z"
+    },
     {
       "name": "avery_blocked",
       "user_id": "avery",
@@ -35,31 +389,25 @@
           "occurred_at": "2026-11-01T15:00:00Z"
         }
       ],
+      "traits": {},
       "persona": "blocked",
       "matched": [
-        "blocked",
-        "implementer",
-        "evaluator"
+        "blocked"
       ],
-      "counts": {
-        "core_action": 0,
-        "invite_sent": 0,
-        "setup_step": 3
-      },
       "reasons": [
         {
+          "kind": "event",
           "action": "picked_template",
-          "category": "setup_step",
           "occurred_at": "2026-11-01T15:00:00.000000Z"
         },
         {
+          "kind": "event",
           "action": "created_workspace",
-          "category": "setup_step",
           "occurred_at": "2026-10-31T15:00:00.000000Z"
         },
         {
+          "kind": "event",
           "action": "connected_slack",
-          "category": "setup_step",
           "occurred_at": "2026-10-30T15:00:00.000000Z"
         }
       ],
@@ -75,15 +423,7 @@
         },
         {
           "action": "edited_doc",
-          "occurred_at": "2026-11-04T18:00:00Z"
-        },
-        {
-          "action": "created_doc",
           "occurred_at": "2026-11-05T15:00:00Z"
-        },
-        {
-          "action": "edited_doc",
-          "occurred_at": "2026-11-05T18:00:00Z"
         },
         {
           "action": "created_doc",
@@ -91,15 +431,7 @@
         },
         {
           "action": "edited_doc",
-          "occurred_at": "2026-11-06T18:00:00Z"
-        },
-        {
-          "action": "created_doc",
           "occurred_at": "2026-11-07T15:00:00Z"
-        },
-        {
-          "action": "edited_doc",
-          "occurred_at": "2026-11-07T18:00:00Z"
         },
         {
           "action": "created_doc",
@@ -107,111 +439,45 @@
         },
         {
           "action": "edited_doc",
+          "occurred_at": "2026-11-08T16:00:00Z"
+        },
+        {
+          "action": "created_doc",
           "occurred_at": "2026-11-09T12:00:00Z"
         },
         {
+          "action": "edited_doc",
+          "occurred_at": "2026-11-09T13:00:00Z"
+        },
+        {
+          "action": "created_doc",
+          "occurred_at": "2026-11-09T14:00:00Z"
+        },
+        {
+          "action": "edited_doc",
+          "occurred_at": "2026-11-09T14:30:00Z"
+        },
+        {
           "action": "sent_invite",
           "occurred_at": "2026-11-09T15:00:00Z"
         }
       ],
+      "traits": {},
       "persona": "champion",
       "matched": [
-        "champion",
-        "power_user",
-        "evaluator"
+        "champion"
       ],
-      "counts": {
-        "core_action": 10,
-        "invite_sent": 1,
-        "setup_step": 0
-      },
       "reasons": [
         {
+          "kind": "event",
           "action": "sent_invite",
-          "category": "invite_sent",
           "occurred_at": "2026-11-09T15:00:00.000000Z"
         }
       ],
       "calculated_at": "2026-11-10T15:00:00.000000Z"
     },
     {
-      "name": "power_user",
-      "user_id": "riley",
-      "events": [
-        {
-          "action": "created_doc",
-          "occurred_at": "2026-11-04T10:00:00Z"
-        },
-        {
-          "action": "created_doc",
-          "occurred_at": "2026-11-04T12:00:00Z"
-        },
-        {
-          "action": "created_doc",
-          "occurred_at": "2026-11-04T15:00:00Z"
-        },
-        {
-          "action": "created_doc",
-          "occurred_at": "2026-11-05T15:00:00Z"
-        },
-        {
-          "action": "created_doc",
-          "occurred_at": "2026-11-06T15:00:00Z"
-        },
-        {
-          "action": "created_doc",
-          "occurred_at": "2026-11-07T15:00:00Z"
-        },
-        {
-          "action": "created_doc",
-          "occurred_at": "2026-11-08T15:00:00Z"
-        },
-        {
-          "action": "created_doc",
-          "occurred_at": "2026-11-09T15:00:00Z"
-        }
-      ],
-      "persona": "power_user",
-      "matched": [
-        "power_user",
-        "evaluator"
-      ],
-      "counts": {
-        "core_action": 8,
-        "invite_sent": 0,
-        "setup_step": 0
-      },
-      "reasons": [
-        {
-          "action": "created_doc",
-          "category": "core_action",
-          "occurred_at": "2026-11-09T15:00:00.000000Z"
-        },
-        {
-          "action": "created_doc",
-          "category": "core_action",
-          "occurred_at": "2026-11-08T15:00:00.000000Z"
-        },
-        {
-          "action": "created_doc",
-          "category": "core_action",
-          "occurred_at": "2026-11-07T15:00:00.000000Z"
-        },
-        {
-          "action": "created_doc",
-          "category": "core_action",
-          "occurred_at": "2026-11-06T15:00:00.000000Z"
-        },
-        {
-          "action": "created_doc",
-          "category": "core_action",
-          "occurred_at": "2026-11-05T15:00:00.000000Z"
-        }
-      ],
-      "calculated_at": "2026-11-10T15:00:00.000000Z"
-    },
-    {
-      "name": "implementer",
+      "name": "recent_setup_not_blocked",
       "user_id": "casey",
       "events": [
         {
@@ -219,591 +485,372 @@
           "occurred_at": "2026-11-08T15:00:00Z"
         },
         {
-          "action": "created_doc",
-          "occurred_at": "2026-11-08T16:00:00Z"
-        },
-        {
           "action": "picked_template",
           "occurred_at": "2026-11-09T15:00:00Z"
         }
       ],
-      "persona": "implementer",
-      "matched": [
-        "implementer",
-        "evaluator"
-      ],
-      "counts": {
-        "core_action": 1,
-        "invite_sent": 0,
-        "setup_step": 2
-      },
-      "reasons": [
+      "traits": {},
+      "persona": "",
+      "matched": [],
+      "reasons": [],
+      "calculated_at": "2026-11-10T15:00:00.000000Z"
+    },
+    {
+      "name": "empty",
+      "user_id": "nobody",
+      "events": [],
+      "traits": {},
+      "persona": "",
+      "matched": [],
+      "reasons": [],
+      "calculated_at": "2026-11-10T15:00:00.000000Z"
+    },
+    {
+      "name": "same_time_later_action_first",
+      "user_id": "tie",
+      "events": [
         {
-          "action": "picked_template",
-          "category": "setup_step",
-          "occurred_at": "2026-11-09T15:00:00.000000Z"
+          "action": "app_opened",
+          "occurred_at": "2026-11-10T12:00:00Z"
         },
         {
-          "action": "connected_slack",
-          "category": "setup_step",
-          "occurred_at": "2026-11-08T15:00:00.000000Z"
+          "action": "session_started",
+          "occurred_at": "2026-11-10T12:00:00Z"
+        },
+        {
+          "action": "app_opened",
+          "occurred_at": "2026-11-10T12:00:00Z"
+        }
+      ],
+      "traits": {},
+      "persona": "developer",
+      "matched": [
+        "developer"
+      ],
+      "reasons": [
+        {
+          "kind": "event",
+          "action": "session_started",
+          "occurred_at": "2026-11-10T12:00:00.000000Z"
+        },
+        {
+          "kind": "event",
+          "action": "app_opened",
+          "occurred_at": "2026-11-10T12:00:00.000000Z"
+        },
+        {
+          "kind": "event",
+          "action": "app_opened",
+          "occurred_at": "2026-11-10T12:00:00.000000Z"
         }
       ],
       "calculated_at": "2026-11-10T15:00:00.000000Z"
     },
     {
-      "name": "evaluator",
-      "user_id": "jordan",
+      "name": "require_one_of",
+      "user_id": "ora",
       "events": [
         {
-          "action": "created_doc",
-          "occurred_at": "2026-11-08T15:00:00Z"
-        },
-        {
-          "action": "created_doc",
+          "action": "sent_invite",
           "occurred_at": "2026-11-09T15:00:00Z"
         }
       ],
-      "persona": "evaluator",
+      "traits": {},
+      "persona": "either",
       "matched": [
-        "evaluator"
+        "either"
       ],
-      "counts": {
-        "core_action": 2,
-        "invite_sent": 0,
-        "setup_step": 0
-      },
       "reasons": [
         {
-          "action": "created_doc",
-          "category": "core_action",
+          "kind": "event",
+          "action": "sent_invite",
           "occurred_at": "2026-11-09T15:00:00.000000Z"
-        },
-        {
-          "action": "created_doc",
-          "category": "core_action",
-          "occurred_at": "2026-11-08T15:00:00.000000Z"
         }
       ],
-      "calculated_at": "2026-11-10T15:00:00.000000Z"
+      "calculated_at": "2026-11-10T15:00:00.000000Z",
+      "rules": {
+        "personas": [
+          {
+            "name": "either",
+            "priority": 1,
+            "require_one_of": [
+              {
+                "count": {
+                  "action": "sent_invite",
+                  "at_least": 1,
+                  "within_days": 14
+                }
+              },
+              {
+                "count": {
+                  "action": "app_opened",
+                  "at_least": 1,
+                  "within_days": 3
+                }
+              }
+            ]
+          }
+        ]
+      }
     },
     {
-      "name": "seven_core_actions",
-      "user_id": "jordan7",
+      "name": "require_one_of_both",
+      "user_id": "orb",
       "events": [
         {
-          "action": "created_doc",
-          "occurred_at": "2026-11-09T15:00:00Z"
+          "action": "sent_invite",
+          "occurred_at": "2026-11-01T15:00:00Z"
         },
+        {
+          "action": "app_opened",
+          "occurred_at": "2026-11-10T12:00:00Z"
+        }
+      ],
+      "traits": {},
+      "persona": "either",
+      "matched": [
+        "either"
+      ],
+      "reasons": [
+        {
+          "kind": "event",
+          "action": "app_opened",
+          "occurred_at": "2026-11-10T12:00:00.000000Z"
+        },
+        {
+          "kind": "event",
+          "action": "sent_invite",
+          "occurred_at": "2026-11-01T15:00:00.000000Z"
+        }
+      ],
+      "calculated_at": "2026-11-10T15:00:00.000000Z",
+      "rules": {
+        "personas": [
+          {
+            "name": "either",
+            "priority": 1,
+            "require_one_of": [
+              {
+                "count": {
+                  "action": "sent_invite",
+                  "at_least": 1,
+                  "within_days": 14
+                }
+              },
+              {
+                "count": {
+                  "action": "app_opened",
+                  "at_least": 1,
+                  "within_days": 3
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "at_most_fits",
+      "user_id": "light1",
+      "events": [
+        {
+          "action": "app_opened",
+          "occurred_at": "2026-11-10T12:00:00Z"
+        }
+      ],
+      "traits": {},
+      "persona": "light",
+      "matched": [
+        "light"
+      ],
+      "reasons": [
+        {
+          "kind": "event",
+          "action": "app_opened",
+          "occurred_at": "2026-11-10T12:00:00.000000Z"
+        }
+      ],
+      "calculated_at": "2026-11-10T15:00:00.000000Z",
+      "rules": {
+        "personas": [
+          {
+            "name": "light",
+            "priority": 1,
+            "require_all": [
+              {
+                "count": {
+                  "action": "app_opened",
+                  "at_least": 1,
+                  "at_most": 2,
+                  "within_days": 14
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "at_most_exceeded",
+      "user_id": "light3",
+      "events": [
+        {
+          "action": "app_opened",
+          "occurred_at": "2026-11-08T12:00:00Z"
+        },
+        {
+          "action": "app_opened",
+          "occurred_at": "2026-11-09T12:00:00Z"
+        },
+        {
+          "action": "app_opened",
+          "occurred_at": "2026-11-10T12:00:00Z"
+        }
+      ],
+      "traits": {},
+      "persona": "",
+      "matched": [],
+      "reasons": [],
+      "calculated_at": "2026-11-10T15:00:00.000000Z",
+      "rules": {
+        "personas": [
+          {
+            "name": "light",
+            "priority": 1,
+            "require_all": [
+              {
+                "count": {
+                  "action": "app_opened",
+                  "at_least": 1,
+                  "at_most": 2,
+                  "within_days": 14
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "priority_tie_uses_file_order",
+      "user_id": "tied",
+      "events": [],
+      "traits": {
+        "role": "member"
+      },
+      "persona": "first",
+      "matched": [
+        "first",
+        "second"
+      ],
+      "reasons": [
+        {
+          "kind": "trait",
+          "key": "role",
+          "equals": "member"
+        }
+      ],
+      "calculated_at": "2026-11-10T15:00:00.000000Z",
+      "rules": {
+        "personas": [
+          {
+            "name": "first",
+            "priority": 1,
+            "require_all": [
+              {
+                "trait": {
+                  "key": "role",
+                  "equals": "member"
+                }
+              }
+            ]
+          },
+          {
+            "name": "second",
+            "priority": 1,
+            "require_all": [
+              {
+                "trait": {
+                  "key": "role",
+                  "equals": "member"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "catch_all",
+      "user_id": "any",
+      "events": [],
+      "traits": {},
+      "persona": "everyone",
+      "matched": [
+        "everyone"
+      ],
+      "reasons": [],
+      "calculated_at": "2026-11-10T15:00:00.000000Z",
+      "rules": {
+        "personas": [
+          {
+            "name": "everyone",
+            "priority": 10
+          }
+        ]
+      }
+    },
+    {
+      "name": "actions_list",
+      "user_id": "writer",
+      "events": [
         {
           "action": "created_doc",
           "occurred_at": "2026-11-09T12:00:00Z"
         },
         {
-          "action": "created_doc",
-          "occurred_at": "2026-11-08T15:00:00Z"
-        },
-        {
-          "action": "created_doc",
-          "occurred_at": "2026-11-07T15:00:00Z"
-        },
-        {
-          "action": "created_doc",
-          "occurred_at": "2026-11-06T15:00:00Z"
-        },
-        {
-          "action": "created_doc",
-          "occurred_at": "2026-11-05T15:00:00Z"
-        },
-        {
-          "action": "created_doc",
-          "occurred_at": "2026-11-04T15:00:00Z"
+          "action": "edited_doc",
+          "occurred_at": "2026-11-09T13:00:00Z"
         }
       ],
-      "persona": "evaluator",
+      "traits": {},
+      "persona": "writer",
       "matched": [
-        "evaluator"
+        "writer"
       ],
-      "counts": {
-        "core_action": 7,
-        "invite_sent": 0,
-        "setup_step": 0
-      },
       "reasons": [
         {
-          "action": "created_doc",
-          "category": "core_action",
-          "occurred_at": "2026-11-09T15:00:00.000000Z"
+          "kind": "event",
+          "action": "edited_doc",
+          "occurred_at": "2026-11-09T13:00:00.000000Z"
         },
         {
+          "kind": "event",
           "action": "created_doc",
-          "category": "core_action",
           "occurred_at": "2026-11-09T12:00:00.000000Z"
-        },
-        {
-          "action": "created_doc",
-          "category": "core_action",
-          "occurred_at": "2026-11-08T15:00:00.000000Z"
-        },
-        {
-          "action": "created_doc",
-          "category": "core_action",
-          "occurred_at": "2026-11-07T15:00:00.000000Z"
-        },
-        {
-          "action": "created_doc",
-          "category": "core_action",
-          "occurred_at": "2026-11-06T15:00:00.000000Z"
         }
       ],
-      "calculated_at": "2026-11-10T15:00:00.000000Z"
-    },
-    {
-      "name": "unknown_empty",
-      "user_id": "nobody",
-      "events": [],
-      "persona": "unknown",
-      "matched": [],
-      "counts": {
-        "core_action": 0,
-        "invite_sent": 0,
-        "setup_step": 0
-      },
-      "reasons": [],
-      "calculated_at": "2026-11-10T15:00:00.000000Z"
-    },
-    {
-      "name": "unmapped_only",
-      "user_id": "looker",
-      "events": [
-        {
-          "action": "viewed_pricing",
-          "occurred_at": "2026-11-09T15:00:00Z"
-        }
-      ],
-      "persona": "unknown",
-      "matched": [],
-      "counts": {
-        "core_action": 0,
-        "invite_sent": 0,
-        "setup_step": 0
-      },
-      "reasons": [],
-      "calculated_at": "2026-11-10T15:00:00.000000Z"
-    },
-    {
-      "name": "invite_only",
-      "user_id": "sam",
-      "events": [
-        {
-          "action": "sent_invite",
-          "occurred_at": "2026-11-09T15:00:00Z"
-        }
-      ],
-      "persona": "champion",
-      "matched": [
-        "champion",
-        "evaluator"
-      ],
-      "counts": {
-        "core_action": 0,
-        "invite_sent": 1,
-        "setup_step": 0
-      },
-      "reasons": [
-        {
-          "action": "sent_invite",
-          "category": "invite_sent",
-          "occurred_at": "2026-11-09T15:00:00.000000Z"
-        }
-      ],
-      "calculated_at": "2026-11-10T15:00:00.000000Z"
-    },
-    {
-      "name": "quiet_power_user",
-      "user_id": "riley_quiet",
-      "events": [
-        {
-          "action": "created_doc",
-          "occurred_at": "2026-10-31T01:00:00Z"
-        },
-        {
-          "action": "edited_doc",
-          "occurred_at": "2026-10-31T02:00:00Z"
-        },
-        {
-          "action": "created_doc",
-          "occurred_at": "2026-10-31T03:00:00Z"
-        },
-        {
-          "action": "edited_doc",
-          "occurred_at": "2026-10-31T04:00:00Z"
-        },
-        {
-          "action": "created_doc",
-          "occurred_at": "2026-10-31T05:00:00Z"
-        },
-        {
-          "action": "edited_doc",
-          "occurred_at": "2026-10-31T06:00:00Z"
-        },
-        {
-          "action": "created_doc",
-          "occurred_at": "2026-10-31T07:00:00Z"
-        },
-        {
-          "action": "edited_doc",
-          "occurred_at": "2026-10-31T08:00:00Z"
-        }
-      ],
-      "persona": "power_user",
-      "matched": [
-        "power_user",
-        "blocked",
-        "evaluator"
-      ],
-      "counts": {
-        "core_action": 8,
-        "invite_sent": 0,
-        "setup_step": 0
-      },
-      "reasons": [
-        {
-          "action": "edited_doc",
-          "category": "core_action",
-          "occurred_at": "2026-10-31T08:00:00.000000Z"
-        },
-        {
-          "action": "created_doc",
-          "category": "core_action",
-          "occurred_at": "2026-10-31T07:00:00.000000Z"
-        },
-        {
-          "action": "edited_doc",
-          "category": "core_action",
-          "occurred_at": "2026-10-31T06:00:00.000000Z"
-        },
-        {
-          "action": "created_doc",
-          "category": "core_action",
-          "occurred_at": "2026-10-31T05:00:00.000000Z"
-        },
-        {
-          "action": "edited_doc",
-          "category": "core_action",
-          "occurred_at": "2026-10-31T04:00:00.000000Z"
-        }
-      ],
-      "calculated_at": "2026-11-10T15:00:00.000000Z"
-    },
-    {
-      "name": "outside_window",
-      "user_id": "old",
-      "events": [
-        {
-          "action": "created_doc",
-          "occurred_at": "2026-10-01T15:00:00Z"
-        }
-      ],
-      "persona": "unknown",
-      "matched": [],
-      "counts": {
-        "core_action": 0,
-        "invite_sent": 0,
-        "setup_step": 0
-      },
-      "reasons": [],
-      "calculated_at": "2026-11-10T15:00:00.000000Z"
-    },
-    {
-      "name": "old_event_ignored",
-      "user_id": "mixed",
-      "events": [
-        {
-          "action": "created_doc",
-          "occurred_at": "2026-10-01T15:00:00Z"
-        },
-        {
-          "action": "created_doc",
-          "occurred_at": "2026-11-09T15:00:00Z"
-        }
-      ],
-      "persona": "evaluator",
-      "matched": [
-        "evaluator"
-      ],
-      "counts": {
-        "core_action": 1,
-        "invite_sent": 0,
-        "setup_step": 0
-      },
-      "reasons": [
-        {
-          "action": "created_doc",
-          "category": "core_action",
-          "occurred_at": "2026-11-09T15:00:00.000000Z"
-        }
-      ],
-      "calculated_at": "2026-11-10T15:00:00.000000Z"
-    },
-    {
-      "name": "exactly_14_days",
-      "user_id": "edge14",
-      "events": [
-        {
-          "action": "created_doc",
-          "occurred_at": "2026-10-27T15:00:00Z"
-        }
-      ],
-      "persona": "blocked",
-      "matched": [
-        "blocked",
-        "evaluator"
-      ],
-      "counts": {
-        "core_action": 1,
-        "invite_sent": 0,
-        "setup_step": 0
-      },
-      "reasons": [
-        {
-          "action": "created_doc",
-          "category": "core_action",
-          "occurred_at": "2026-10-27T15:00:00.000000Z"
-        }
-      ],
-      "calculated_at": "2026-11-10T15:00:00.000000Z"
-    },
-    {
-      "name": "just_outside_14",
-      "user_id": "edge14out",
-      "events": [
-        {
-          "action": "created_doc",
-          "occurred_at": "2026-10-27T14:59:59Z"
-        }
-      ],
-      "persona": "unknown",
-      "matched": [],
-      "counts": {
-        "core_action": 0,
-        "invite_sent": 0,
-        "setup_step": 0
-      },
-      "reasons": [],
-      "calculated_at": "2026-11-10T15:00:00.000000Z"
-    },
-    {
-      "name": "exactly_7_days",
-      "user_id": "edge7",
-      "events": [
-        {
-          "action": "connected_slack",
-          "occurred_at": "2026-11-03T15:00:00Z"
-        },
-        {
-          "action": "picked_template",
-          "occurred_at": "2026-11-03T15:00:00Z"
-        }
-      ],
-      "persona": "blocked",
-      "matched": [
-        "blocked",
-        "implementer",
-        "evaluator"
-      ],
-      "counts": {
-        "core_action": 0,
-        "invite_sent": 0,
-        "setup_step": 2
-      },
-      "reasons": [
-        {
-          "action": "picked_template",
-          "category": "setup_step",
-          "occurred_at": "2026-11-03T15:00:00.000000Z"
-        },
-        {
-          "action": "connected_slack",
-          "category": "setup_step",
-          "occurred_at": "2026-11-03T15:00:00.000000Z"
-        }
-      ],
-      "calculated_at": "2026-11-10T15:00:00.000000Z"
-    },
-    {
-      "name": "just_under_7",
-      "user_id": "edge7in",
-      "events": [
-        {
-          "action": "connected_slack",
-          "occurred_at": "2026-11-03T15:00:01Z"
-        },
-        {
-          "action": "picked_template",
-          "occurred_at": "2026-11-03T15:00:01Z"
-        }
-      ],
-      "persona": "implementer",
-      "matched": [
-        "implementer",
-        "evaluator"
-      ],
-      "counts": {
-        "core_action": 0,
-        "invite_sent": 0,
-        "setup_step": 2
-      },
-      "reasons": [
-        {
-          "action": "picked_template",
-          "category": "setup_step",
-          "occurred_at": "2026-11-03T15:00:01.000000Z"
-        },
-        {
-          "action": "connected_slack",
-          "category": "setup_step",
-          "occurred_at": "2026-11-03T15:00:01.000000Z"
-        }
-      ],
-      "calculated_at": "2026-11-10T15:00:00.000000Z"
-    },
-    {
-      "name": "casey_recent",
-      "user_id": "casey_clock",
-      "events": [
-        {
-          "action": "connected_slack",
-          "occurred_at": "2026-11-06T15:00:00Z"
-        },
-        {
-          "action": "created_workspace",
-          "occurred_at": "2026-11-07T15:00:00Z"
-        },
-        {
-          "action": "created_doc",
-          "occurred_at": "2026-11-07T18:00:00Z"
-        },
-        {
-          "action": "picked_template",
-          "occurred_at": "2026-11-08T15:00:00Z"
-        }
-      ],
-      "persona": "implementer",
-      "matched": [
-        "implementer",
-        "evaluator"
-      ],
-      "counts": {
-        "core_action": 1,
-        "invite_sent": 0,
-        "setup_step": 3
-      },
-      "reasons": [
-        {
-          "action": "picked_template",
-          "category": "setup_step",
-          "occurred_at": "2026-11-08T15:00:00.000000Z"
-        },
-        {
-          "action": "created_workspace",
-          "category": "setup_step",
-          "occurred_at": "2026-11-07T15:00:00.000000Z"
-        },
-        {
-          "action": "connected_slack",
-          "category": "setup_step",
-          "occurred_at": "2026-11-06T15:00:00.000000Z"
-        }
-      ],
-      "calculated_at": "2026-11-10T15:00:00.000000Z"
-    },
-    {
-      "name": "casey_later",
-      "user_id": "casey_clock",
-      "events": [
-        {
-          "action": "connected_slack",
-          "occurred_at": "2026-11-06T15:00:00Z"
-        },
-        {
-          "action": "created_workspace",
-          "occurred_at": "2026-11-07T15:00:00Z"
-        },
-        {
-          "action": "created_doc",
-          "occurred_at": "2026-11-07T18:00:00Z"
-        },
-        {
-          "action": "picked_template",
-          "occurred_at": "2026-11-08T15:00:00Z"
-        }
-      ],
-      "persona": "blocked",
-      "matched": [
-        "blocked",
-        "implementer",
-        "evaluator"
-      ],
-      "counts": {
-        "core_action": 1,
-        "invite_sent": 0,
-        "setup_step": 3
-      },
-      "reasons": [
-        {
-          "action": "picked_template",
-          "category": "setup_step",
-          "occurred_at": "2026-11-08T15:00:00.000000Z"
-        },
-        {
-          "action": "created_doc",
-          "category": "core_action",
-          "occurred_at": "2026-11-07T18:00:00.000000Z"
-        },
-        {
-          "action": "created_workspace",
-          "category": "setup_step",
-          "occurred_at": "2026-11-07T15:00:00.000000Z"
-        },
-        {
-          "action": "connected_slack",
-          "category": "setup_step",
-          "occurred_at": "2026-11-06T15:00:00.000000Z"
-        }
-      ],
-      "calculated_at": "2026-11-17T15:00:00.000000Z"
-    },
-    {
-      "name": "future_event_ignored",
-      "user_id": "future",
-      "events": [
-        {
-          "action": "created_doc",
-          "occurred_at": "2026-11-11T15:00:00Z"
-        },
-        {
-          "action": "created_doc",
-          "occurred_at": "2026-11-09T15:00:00Z"
-        }
-      ],
-      "persona": "evaluator",
-      "matched": [
-        "evaluator"
-      ],
-      "counts": {
-        "core_action": 1,
-        "invite_sent": 0,
-        "setup_step": 0
-      },
-      "reasons": [
-        {
-          "action": "created_doc",
-          "category": "core_action",
-          "occurred_at": "2026-11-09T15:00:00.000000Z"
-        }
-      ],
-      "calculated_at": "2026-11-10T15:00:00.000000Z"
+      "calculated_at": "2026-11-10T15:00:00.000000Z",
+      "rules": {
+        "personas": [
+          {
+            "name": "writer",
+            "priority": 1,
+            "require_all": [
+              {
+                "count": {
+                  "actions": [
+                    "created_doc",
+                    "edited_doc"
+                  ],
+                  "at_least": 2,
+                  "within_days": 14
+                }
+              }
+            ]
+          }
+        ]
+      }
     }
   ]
 }
