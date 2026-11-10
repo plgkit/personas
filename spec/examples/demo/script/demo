@@ -1,0 +1,59 @@
+#!/usr/bin/env python3
+"""Print a nudge for Avery and a nudge for Blake."""
+
+import json
+import sys
+from pathlib import Path
+
+
+def repo_root():
+    for candidate in Path(__file__).resolve().parents:
+        if (candidate / "spec" / "fixtures" / "cases.json").is_file():
+            return candidate
+    raise SystemExit("Could not find the personas repo.")
+
+
+REPO = repo_root()
+sys.path.insert(0, str(REPO / "packages" / "python"))
+
+from plgkit_personas import connect, load_mapping, load_policy, migrate, persona, track
+
+LINES = {
+    "blocked": "Want help with the step you stopped on?",
+    "champion": "Bring in the person you invited.",
+}
+SHOW = ("avery_blocked", "blake_champion")
+
+
+def main():
+    fixture = json.loads((REPO / "spec" / "fixtures" / "cases.json").read_text(encoding="utf-8"))
+    examples = REPO / "spec" / "examples"
+    mapping = load_mapping(examples / "mapping.yml")
+    policy = load_policy(examples / "config.yml")
+    now = fixture["calculated_at"]
+    by_name = {case["name"]: case for case in fixture["cases"]}
+    db = connect("sqlite:///:memory:")
+    migrate(db)
+    for name in SHOW:
+        case = by_name[name]
+        for event in case["events"]:
+            stored = track(
+                case["user_id"],
+                event["action"],
+                {"occurred_at": event["occurred_at"]},
+                db=db,
+                now=now,
+            )
+            if not stored:
+                raise SystemExit(f"Could not store {event['action']} for {case['user_id']}.")
+        result = persona(case["user_id"], db=db, now=now, mapping=mapping, config=policy)
+        if result["persona"] != case["persona"]:
+            raise SystemExit(
+                f"{case['user_id']} is {result['persona']}, expected {case['persona']}."
+            )
+        line = LINES[result["persona"]]
+        print(f"{case['user_id'].capitalize():<8} {result['persona']:<12} {line}")
+
+
+if __name__ == "__main__":
+    main()
