@@ -1,30 +1,35 @@
-"""Load one user's events and judge them."""
+"""Read the persona row written by calculate."""
 
 from __future__ import annotations
 
-from plgkit_personas.config import load_policy
-from plgkit_personas.judge import judge, require_text
-from plgkit_personas.mapping import load_mapping
-from plgkit_personas.store import get_default_db, list_events
+from plgkit_personas.errors import PlgkitError
+from plgkit_personas.judge import require_text
+from plgkit_personas.store import get_default_db, read_snapshot
 
 
-def persona(
-    user_id,
-    *,
-    db=None,
-    now=None,
-    mapping=None,
-    config=None,
-    mapping_path=None,
-    config_path=None,
-):
-    """Return the persona object for one user."""
+def persona(user_id, *, db=None):
+    """Return the stored persona. An empty label means calculate has not run, or no rule matched."""
     user_id = require_text(user_id, "user_id")
     if db is None:
         db = get_default_db()
-    if mapping is None:
-        mapping = load_mapping(mapping_path)
-    if config is None:
-        config = load_policy(config_path)
-    events = list_events(db, user_id)
-    return judge(user_id, events, mapping=mapping, policy=config, now=now)
+    try:
+        row = read_snapshot(db, user_id)
+    except PlgkitError:
+        raise
+    except Exception as exc:
+        raise PlgkitError("Could not read the persona. Run plgkit-personas migrate.") from exc
+    if row is None:
+        return {
+            "user_id": user_id,
+            "persona": "",
+            "matched": [],
+            "reasons": [],
+            "calculated_at": "",
+        }
+    return row
+
+
+def persona_is(user_id, name, *, db=None):
+    """True when the stored winner is `name`."""
+    name = require_text(name, "persona")
+    return persona(user_id, db=db)["persona"] == name

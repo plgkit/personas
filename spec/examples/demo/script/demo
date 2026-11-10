@@ -26,7 +26,7 @@ sys.path.insert(0, str(REPO / "packages" / "python"))
 from audiences import bind
 from messages import load_messages
 from nudges_root import nudges_root
-from plgkit_personas import connect, load_mapping, load_policy, migrate, persona, track
+from plgkit_personas import calculate, connect, load_rules, migrate, persona, track
 
 SHOW = ("avery_blocked", "blake_champion")
 
@@ -49,8 +49,7 @@ def _python():
 
     fixture = json.loads((REPO / "spec" / "fixtures" / "cases.json").read_text(encoding="utf-8"))
     examples = REPO / "spec" / "examples"
-    mapping = load_mapping(examples / "mapping.yml")
-    policy = load_policy(examples / "config.yml")
+    rules = load_rules(examples / "personas.yml")
     now = fixture["calculated_at"]
     by_name = {case["name"]: case for case in fixture["cases"]}
     messages = load_messages(examples / "nudges" / "messages")
@@ -58,7 +57,6 @@ def _python():
     migrate(db)
     nudge_db = nudge_connect("sqlite:///:memory:")
     nudge_migrate(nudge_db)
-    audiences = bind(db=db, now=now, mapping=mapping, policy=policy)
     for name in SHOW:
         case = by_name[name]
         for event in case["events"]:
@@ -71,7 +69,11 @@ def _python():
             )
             if not stored:
                 raise SystemExit(f"Could not store {event['action']} for {case['user_id']}.")
-        result = persona(case["user_id"], db=db, now=now, mapping=mapping, config=policy)
+    calculate(db=db, now=now, rules=rules)
+    audiences = bind(db=db)
+    for name in SHOW:
+        case = by_name[name]
+        result = persona(case["user_id"], db=db)
         if result["persona"] != case["persona"]:
             raise SystemExit(
                 f"{case['user_id']} is {result['persona']}, expected {case['persona']}."

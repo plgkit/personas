@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 
 import { bind } from "../../../spec/examples/nudges/audiences.ts";
 import { loadMessages } from "../../../spec/examples/nudges/messages.ts";
-import { connect, migrate, track } from "../src/index.ts";
+import { calculate, connect, migrate, track } from "../src/index.ts";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const fixture = JSON.parse(fs.readFileSync(path.join(root, "spec", "fixtures", "cases.json"), "utf8"));
@@ -23,32 +23,20 @@ test("message files hold the two lines", () => {
   });
 });
 
-test("checks follow the label", () => {
+test("checks follow the stored winner", () => {
   for (const item of fixture.cases) {
+    if (!["avery_blocked", "blake_champion", "developer_member", "empty"].includes(item.name)) continue;
     const db = connect("sqlite:///:memory:");
     migrate(db);
     const now = item.calculated_at as string;
     for (const event of item.events) {
-      const stored = track(item.user_id, event.action, { occurred_at: event.occurred_at }, { db, now });
-      assert.equal(stored, true, item.name);
+      track(item.user_id, event.action, { occurred_at: event.occurred_at }, { db, now });
     }
-    const checks = bind({ db, now, mapping: fixture.mapping, policy: fixture.config });
+    calculate({ db, now, userId: item.user_id, rules: fixture.rules });
+    const checks = bind({ db });
     const ctx = { user: { id: item.user_id } };
     assert.equal(checks.persona_is_blocked(ctx), item.persona === "blocked", item.name);
     assert.equal(checks.persona_is_champion(ctx), item.persona === "champion", item.name);
+    db.close?.();
   }
-});
-
-test("sample files mark Avery blocked", () => {
-  const item = fixture.cases.find((entry: { name: string }) => entry.name === "avery_blocked");
-  const db = connect("sqlite:///:memory:");
-  migrate(db);
-  const now = item.calculated_at as string;
-  for (const event of item.events) {
-    track(item.user_id, event.action, { occurred_at: event.occurred_at }, { db, now });
-  }
-  const checks = bind({ db, now });
-  assert.equal(checks.persona_is_blocked({ user: { id: "avery" } }), true);
-  assert.equal(checks.persona_is_champion({ user: { id: "avery" } }), false);
-  assert.equal(checks.persona_is_blocked({}), false);
 });

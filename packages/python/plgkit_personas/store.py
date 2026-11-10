@@ -19,8 +19,8 @@ import uuid
 from importlib.resources import files as resource_files
 from pathlib import Path
 
+from plgkit_personas.config import read_config
 from plgkit_personas.errors import PlgkitError
-from plgkit_personas.flat import read_flat
 
 DEFAULT_DATABASE_URL_ENV = "PLGKIT_DATABASE_URL"
 DEFAULT_DATABASE_URL = "sqlite:///plgkit_events.sqlite"
@@ -168,6 +168,74 @@ def list_events(db, user_id):
     return [{"action": action, "occurred_at": occurred_at} for action, occurred_at in rows]
 
 
+def upsert_trait(db, user_id, key, value, updated_at):
+    with _lock:
+        db.execute(
+            "INSERT INTO plgkit_persona_traits (user_id, key, value, updated_at) "
+            "VALUES (?, ?, ?, ?) "
+            "ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value, "
+            "updated_at = excluded.updated_at",
+            (user_id, key, value, updated_at),
+        )
+
+
+def list_traits(db, user_id):
+    with _lock:
+        rows = db.execute(
+            "SELECT key, value FROM plgkit_persona_traits WHERE user_id = ? ORDER BY key ASC",
+            (user_id,),
+        ).fetchall()
+    return {key: value for key, value in rows}
+
+
+def list_user_ids(db):
+    with _lock:
+        rows = db.execute(
+            "SELECT user_id FROM plgkit_persona_events "
+            "UNION SELECT user_id FROM plgkit_persona_traits "
+            "ORDER BY user_id ASC"
+        ).fetchall()
+    return [row[0] for row in rows]
+
+
+def write_snapshot(db, result):
+    payload = (
+        result["user_id"],
+        result["persona"],
+        json.dumps(result["matched"], ensure_ascii=False, separators=(",", ":")),
+        json.dumps(result["reasons"], ensure_ascii=False, sort_keys=True, separators=(",", ":")),
+        result["calculated_at"],
+    )
+    with _lock:
+        db.execute(
+            "INSERT INTO plgkit_persona_snapshots "
+            "(user_id, persona, matched, reasons, calculated_at) "
+            "VALUES (?, ?, ?, ?, ?) "
+            "ON CONFLICT(user_id) DO UPDATE SET "
+            "persona = excluded.persona, matched = excluded.matched, "
+            "reasons = excluded.reasons, calculated_at = excluded.calculated_at",
+            payload,
+        )
+
+
+def read_snapshot(db, user_id):
+    with _lock:
+        row = db.execute(
+            "SELECT user_id, persona, matched, reasons, calculated_at "
+            "FROM plgkit_persona_snapshots WHERE user_id = ?",
+            (user_id,),
+        ).fetchone()
+    if row is None:
+        return None
+    return {
+        "user_id": row[0],
+        "persona": row[1],
+        "matched": json.loads(row[2]),
+        "reasons": json.loads(row[3]),
+        "calculated_at": row[4],
+    }
+
+
 def _connect_sqlite(url):
     path = _sqlite_path(url)
     try:
@@ -214,7 +282,7 @@ def _env_var_name(config_path):
     if path is None:
         return DEFAULT_DATABASE_URL_ENV
     try:
-        raw = read_flat(path)
+        raw = read_config(path)
     except PlgkitError:
         raise
     name = raw.get("database_url_env", DEFAULT_DATABASE_URL_ENV)

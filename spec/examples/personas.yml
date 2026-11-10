@@ -1,0 +1,69 @@
+# Personas for the sample app. Copy this file to plgkit/personas/personas.yml.
+# Lower priority wins. The same number uses the earlier persona.
+# Omitted require_all, require_one_of, and exclude match everyone.
+
+groups:
+  app_use:
+    - app_opened
+    - session_started
+  setup:
+    - connected_slack
+    - created_workspace
+    - picked_template
+  invites:
+    - sent_invite
+    - copied_invite_link
+  product:
+    - connected_slack
+    - created_workspace
+    - picked_template
+    - created_doc
+    - edited_doc
+    - sent_invite
+    - copied_invite_link
+    - app_opened
+    - session_started
+
+personas:
+  - name: developer
+    priority: 1
+    require_all:
+      - count:
+          group: app_use
+          at_least: 3
+          within_days: 3
+    exclude:
+      - trait:
+          key: role
+          equals: billing_admin
+  - name: billing_admin
+    priority: 2
+    require_all:
+      - trait:
+          key: role
+          equals: billing_admin
+  - name: champion
+    priority: 3
+    require_all:
+      - count:
+          group: invites
+          at_least: 1
+          within_days: 14
+  - name: blocked
+    priority: 4
+    require_all:
+      - count:
+          group: setup
+          at_least: 1
+          within_days: 14
+    exclude:
+      - count:
+          group: product
+          at_least: 1
+          within_days: 7
+  - name: member
+    priority: 5
+    require_all:
+      - trait:
+          key: role
+          equals: member

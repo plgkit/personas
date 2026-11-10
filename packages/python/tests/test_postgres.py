@@ -4,17 +4,20 @@ import os
 import unittest
 import uuid
 
-from plgkit_personas import connect, migrate, persona, track
+from plgkit_personas import calculate, connect, migrate, persona, track
 
 TEST_URL = os.environ.get("PLGKIT_TEST_DATABASE_URL", "").strip()
 NOW = "2026-11-10T15:00:00Z"
-MAPPING = {"created_doc": "core_action", "sent_invite": "invite_sent"}
-POLICY = {
-    "lookback_days": 14,
-    "silence_days": 7,
-    "champion_min": 1,
-    "power_user_min": 8,
-    "implementer_min": 2,
+RULES = {
+    "personas": [
+        {
+            "name": "champion",
+            "priority": 1,
+            "require_all": [
+                {"count": {"action": "sent_invite", "at_least": 1, "within_days": 14}}
+            ],
+        }
+    ]
 }
 
 
@@ -31,6 +34,9 @@ class PostgresTests(unittest.TestCase):
         self.addCleanup(
             lambda: db.execute("DELETE FROM plgkit_persona_events WHERE user_id = ?", (user_id,))
         )
+        self.addCleanup(
+            lambda: db.execute("DELETE FROM plgkit_persona_snapshots WHERE user_id = ?", (user_id,))
+        )
         migrate(db)
         migrate(db)
         self.assertTrue(
@@ -39,10 +45,10 @@ class PostgresTests(unittest.TestCase):
         self.assertFalse(
             track(user_id, "created_doc", {"occurred_at": "2026-11-09T16:00:00Z", "event_id": user_id}, db=db, now=NOW)
         )
-        result = persona(user_id, db=db, now=NOW, mapping=MAPPING, config=POLICY)
+        calculate(db=db, now=NOW, user_id=user_id, rules=RULES)
+        result = persona(user_id, db=db)
         self.assertEqual(result["persona"], "champion")
-        self.assertEqual(result["counts"]["invite_sent"], 1)
-        self.assertEqual(result["counts"]["core_action"], 0)
+        self.assertEqual(result["reasons"][0]["action"], "sent_invite")
 
 
 if __name__ == "__main__":

@@ -1,20 +1,21 @@
 # Examples
 
-Copy this folder into your app.
+Copy these files into your app.
 
 ```
+your-app/plgkit/personas/personas.yml
 your-app/plgkit/personas/config.yml
-your-app/plgkit/personas/mapping.yml
 ```
 
-`config.yml` holds the window, the thresholds, and the name of the database variable.
+`personas.yml` names the personas, their priority, and their criteria. The sample file defines `developer`, `billing_admin`, `champion`, `blocked`, and `member`.
 
-`mapping.yml` turns your verbs into `core_action`, `invite_sent`, and `setup_step`.
+`config.yml` names the environment variable that holds the database address.
 
-Then create the table:
+Then create the tables and calculate:
 
 ```bash
 plgkit-personas migrate
+plgkit-personas calculate
 ```
 
 From this repo, the other two packages are:
@@ -25,17 +26,20 @@ go run ./packages/go/cmd/plgkit-personas migrate
 ```
 
 ```python
-from plgkit_personas import track, persona
+from plgkit_personas import calculate, identify, persona, persona_is, track
 
-track(user_id, "created_doc", {"occurred_at": "2026-11-09T15:00:00Z"})
+track(user_id, "app_opened", {"occurred_at": "2026-11-09T15:00:00Z"})
+identify(user_id, {"role": "member"})
+calculate()
 persona(user_id)
+persona_is(user_id, "developer")
 ```
 
-The [demo](demo) seeds Avery and Blake and asks nudges which line to print.
+The [demo](demo) seeds Avery and Blake, calculates, and asks nudges which line to print.
 
-To show a line from a persona, copy [nudges/audiences.py](nudges/audiences.py) (or the `.ts` / `.go` file) next to your nudge messages, and copy the two files in [nudges/messages](nudges/messages) into `plgkit/nudges/messages/`.
+To show a line from a stored persona, copy [nudges/audiences.py](nudges/audiences.py) (or the `.ts` / `.go` file) next to your nudge messages, and copy the two files in [nudges/messages](nudges/messages) into `plgkit/nudges/messages/`.
 
 | Message | Shown when | Line |
 |---|---|---|
-| `20261110150400-home-blocked-help` | `persona_is_blocked` | Want help with the step you stopped on? |
-| `20261110150401-home-champion-invite` | `persona_is_champion` | Bring in the person you invited. |
+| `20261110150400-home-blocked-help` | `persona_is(user_id, "blocked")` | Want help with the step you stopped on? |
+| `20261110150401-home-champion-invite` | `persona_is(user_id, "champion")` | Bring in the person you invited. |

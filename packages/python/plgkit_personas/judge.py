@@ -1,60 +1,40 @@
-"""Turn stored events into one persona. No database, no clock of its own."""
+"""Match one user against the personas in personas.yml. No database."""
 
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from plgkit_personas.config import normalize_policy
 from plgkit_personas.errors import PlgkitError
-from plgkit_personas.mapping import CATEGORIES, normalize_mapping
+from plgkit_personas.rules import normalize_rules
 
 REASON_LIMIT = 5
-_SUPPORTS = {
-    "champion": frozenset({"invite_sent"}),
-    "power_user": frozenset({"core_action"}),
-    "blocked": frozenset(CATEGORIES),
-    "implementer": frozenset({"setup_step"}),
-    "evaluator": frozenset(CATEGORIES),
-    "unknown": frozenset(),
-}
 
 
-def judge(user_id, events, *, mapping, policy=None, now=None):
-    """Return the persona object for one user.
+def judge(user_id, events, traits=None, rules=None, *, now=None):
+    """Return the winning persona for one user at `now`.
 
-    `events` is a list of `{action, occurred_at}`. `mapping` is
-    `{action: category}`. `now` becomes `calculated_at`.
+    `events` is a list of `{action, occurred_at}`. `traits` is `{key: value}`.
+    `rules` is the personas.yml object. The winner is the matching persona
+    with the lowest priority. No match leaves `persona` empty.
     """
     user_id = require_text(user_id, "user_id")
     moment = parse_time(now) if now is not None else datetime.now(timezone.utc)
-    rules = normalize_policy(policy)
-    categories = normalize_mapping(mapping)
-    counted = _in_window(events, categories, moment, rules["lookback_days"])
-    counts = {name: 0 for name in CATEGORIES}
-    for event in counted:
-        counts[event["category"]] += 1
-    newest = counted[-1]["occurred_at"] if counted else None
-    silence_at = moment - timedelta(days=rules["silence_days"])
-    quiet = newest is not None and newest <= silence_at
-    started = counts["setup_step"] >= 1 or counts["core_action"] >= 1
+    rules = normalize_rules(rules if rules is not None else {"groups": {}, "personas": []})
+    stored_traits = _traits(traits)
+    prepared = _prepare_events(events)
+    ordered = sorted(rules["personas"], key=lambda item: (item["priority"], item["order"]))
     matched = []
-    if counts["invite_sent"] >= rules["champion_min"]:
-        matched.append("champion")
-    if counts["core_action"] >= rules["power_user_min"]:
-        matched.append("power_user")
-    if started and quiet:
-        matched.append("blocked")
-    if counts["setup_step"] >= rules["implementer_min"]:
-        matched.append("implementer")
-    if counted:
-        matched.append("evaluator")
-    persona_name = matched[0] if matched else "unknown"
+    winner = None
+    for persona in ordered:
+        if _matches(persona, prepared, stored_traits, moment):
+            matched.append(persona["name"])
+            if winner is None:
+                winner = persona
     return {
         "user_id": user_id,
-        "persona": persona_name,
-        "reasons": _reasons(counted, persona_name),
-        "counts": counts,
+        "persona": "" if winner is None else winner["name"],
         "matched": matched,
+        "reasons": [] if winner is None else _reasons(winner, prepared, stored_traits, moment),
         "calculated_at": format_time(moment),
     }
 
@@ -87,47 +67,106 @@ def require_text(value, name):
     return value.strip()
 
 
-def _in_window(events, mapping, moment, lookback_days):
+def _matches(persona, events, traits, moment):
+    for condition in persona["require_all"]:
+        if not _holds(condition, events, traits, moment):
+            return False
+    if persona["require_one_of"]:
+        if not any(_holds(condition, events, traits, moment) for condition in persona["require_one_of"]):
+            return False
+    for condition in persona["exclude"]:
+        if _holds(condition, events, traits, moment):
+            return False
+    return True
+
+
+def _holds(condition, events, traits, moment):
+    if condition["kind"] == "trait":
+        return traits.get(condition["key"]) == condition["equals"]
+    matched = _counted(condition, events, moment)
+    count = len(matched)
+    if count < condition["at_least"]:
+        return False
+    if condition["at_most"] is not None and count > condition["at_most"]:
+        return False
+    return True
+
+
+def _counted(condition, events, moment):
+    start = moment - timedelta(days=condition["within_days"])
+    actions = set(condition["actions"])
+    return [
+        event
+        for event in events
+        if event["action"] in actions and start <= event["occurred_at"] <= moment
+    ]
+
+
+def _reasons(persona, events, traits, moment):
+    supporting = []
+    for condition in list(persona["require_all"]) + list(persona["require_one_of"]):
+        if _holds(condition, events, traits, moment):
+            supporting.append(condition)
+    seen = set()
+    chosen = []
+    for condition in supporting:
+        if condition["kind"] != "count":
+            continue
+        for event in _counted(condition, events, moment):
+            key = (event["occurred_at"], event["action"], event["seq"])
+            if key in seen:
+                continue
+            seen.add(key)
+            chosen.append(event)
+    chosen.sort(key=lambda item: (item["occurred_at"], item["action"], item["seq"]), reverse=True)
+    reasons = [
+        {
+            "kind": "event",
+            "action": event["action"],
+            "occurred_at": format_time(event["occurred_at"]),
+        }
+        for event in chosen
+    ]
+    for condition in supporting:
+        if condition["kind"] == "trait":
+            reasons.append(
+                {"kind": "trait", "key": condition["key"], "equals": condition["equals"]}
+            )
+    return reasons[:REASON_LIMIT]
+
+
+def _prepare_events(events):
     if events is None:
         events = []
     if not isinstance(events, list):
         raise PlgkitError("events must be a list.")
-    start = moment - timedelta(days=lookback_days)
-    counted = []
+    prepared = []
     for index, event in enumerate(events):
         if not isinstance(event, dict):
             raise PlgkitError("each event must be an object.")
         action = event.get("action")
         if not isinstance(action, str) or action.strip() == "":
             raise PlgkitError("each event needs an action.")
-        action = action.strip()
-        category = mapping.get(action)
-        if category not in CATEGORIES:
-            continue
-        occurred_at = parse_time(event.get("occurred_at"))
-        if occurred_at < start or occurred_at > moment:
-            continue
-        counted.append(
+        prepared.append(
             {
-                "action": action,
-                "category": category,
-                "occurred_at": occurred_at,
+                "action": action.strip(),
+                "occurred_at": parse_time(event.get("occurred_at")),
                 "seq": index,
             }
         )
-    counted.sort(key=lambda item: (item["occurred_at"], item["action"], item["seq"]))
-    return counted
+    return prepared
 
 
-def _reasons(counted, persona_name):
-    supported = [event for event in counted if event["category"] in _SUPPORTS[persona_name]]
-    supported.sort(key=lambda item: (item["occurred_at"], item["action"], item["seq"]), reverse=True)
-    chosen = supported[:REASON_LIMIT]
-    return [
-        {
-            "action": event["action"],
-            "category": event["category"],
-            "occurred_at": format_time(event["occurred_at"]),
-        }
-        for event in chosen
-    ]
+def _traits(traits):
+    if traits is None:
+        return {}
+    if not isinstance(traits, dict):
+        raise PlgkitError("traits must be an object of strings.")
+    cleaned = {}
+    for key, value in traits.items():
+        if not isinstance(key, str) or key.strip() == "":
+            raise PlgkitError("trait keys must be non-empty strings.")
+        if not isinstance(value, str):
+            raise PlgkitError("trait values must be strings.")
+        cleaned[key.strip()] = value
+    return cleaned

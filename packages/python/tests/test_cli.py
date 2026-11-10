@@ -34,7 +34,44 @@ class CliTests(unittest.TestCase):
                 row = conn.execute(
                     "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'plgkit_persona_events'"
                 ).fetchone()
+                traits = conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'plgkit_persona_traits'"
+                ).fetchone()
             self.assertIsNotNone(row)
+            self.assertIsNotNone(traits)
+
+    def test_calculate(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            database = Path(tmp) / "events.sqlite"
+            env = os.environ.copy()
+            env["PYTHONPATH"] = str(ROOT)
+            env["PLGKIT_DATABASE_URL"] = "sqlite:///" + database.as_posix()
+            env.pop("PLGKIT_PERSONA_MIGRATIONS_DIR", None)
+            app = Path(tmp) / "plgkit" / "personas"
+            app.mkdir(parents=True)
+            (app / "personas.yml").write_text(
+                "personas:\n  - name: everyone\n    priority: 1\n",
+                encoding="utf-8",
+            )
+            migrated = subprocess.run(
+                [sys.executable, "-m", "plgkit_personas", "migrate"],
+                cwd=tmp,
+                env=env,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(migrated.returncode, 0, migrated.stderr)
+            completed = subprocess.run(
+                [sys.executable, "-m", "plgkit_personas", "calculate", "--user", "ada"],
+                cwd=tmp,
+                env=env,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertIn("Calculated 1 users. 1 assigned. 0 unmatched.", completed.stdout)
 
     def test_usage(self):
         env = os.environ.copy()

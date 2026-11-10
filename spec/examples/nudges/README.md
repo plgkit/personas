@@ -15,6 +15,4 @@ Copy one audience file next to them:
 | `20261110150400-home-blocked-help` | `persona_is_blocked` | Want help with the step you stopped on? |
 | `20261110150401-home-champion-invite` | `persona_is_champion` | Bring in the person you invited. |
 
-`evaluator`, `implementer`, `power_user`, and `unknown` match neither name, so these two messages stay hidden.
-
-The functions call `persona()` for `ctx.user.id`. In an app, `plgkit/personas/mapping.yml` and `config.yml` are picked up from the working directory.
+Those two functions are written by hand. Each one calls `persona_is` with `blocked` or `champion`. Run `plgkit-personas calculate` before the page asks nudges what to show. A stored persona with any other name matches neither function, so these two messages stay hidden.

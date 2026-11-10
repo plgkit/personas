@@ -4,62 +4,108 @@ import json
 import unittest
 from pathlib import Path
 
-from plgkit_personas import judge
-from plgkit_personas.config import DEFAULT_POLICY, load_policy
-from plgkit_personas.mapping import load_mapping
+from plgkit_personas import PlgkitError, judge, load_rules, normalize_rules
 
 ROOT = Path(__file__).resolve().parents[3]
 FIXTURE = json.loads((ROOT / "spec" / "fixtures" / "cases.json").read_text(encoding="utf-8"))
 
 
 class JudgeTests(unittest.TestCase):
-    def test_defaults_match_the_fixture(self):
-        self.assertEqual(DEFAULT_POLICY, FIXTURE["config"])
-
-    def test_examples_match_the_fixture(self):
-        examples = ROOT / "spec" / "examples"
-        self.assertEqual(load_mapping(examples / "mapping.yml"), FIXTURE["mapping"])
-        self.assertEqual(load_policy(examples / "config.yml"), FIXTURE["config"])
+    def test_example_file_matches_the_fixture(self):
+        loaded = load_rules(ROOT / "spec" / "examples" / "personas.yml")
+        self.assertEqual(loaded, normalize_rules(FIXTURE["rules"]))
 
     def test_cases(self):
-        self.assertGreaterEqual(len(FIXTURE["cases"]), 2)
         names = [case["name"] for case in FIXTURE["cases"]]
+        self.assertIn("developer_member", names)
         self.assertIn("avery_blocked", names)
         self.assertIn("blake_champion", names)
         for case in FIXTURE["cases"]:
+            rules = case.get("rules", FIXTURE["rules"])
             result = judge(
                 case["user_id"],
                 case["events"],
-                mapping=FIXTURE["mapping"],
-                policy=FIXTURE["config"],
+                case["traits"],
+                rules,
                 now=case["calculated_at"],
             )
             self.assertEqual(result["user_id"], case["user_id"], case["name"])
             self.assertEqual(result["persona"], case["persona"], case["name"])
             self.assertEqual(result["matched"], case["matched"], case["name"])
-            self.assertEqual(result["counts"], case["counts"], case["name"])
             self.assertEqual(result["reasons"], case["reasons"], case["name"])
             self.assertEqual(result["calculated_at"], case["calculated_at"], case["name"])
-            self.assertLessEqual(len(result["reasons"]), 5, case["name"])
 
-    def test_avery_and_blake_are_the_demo_pair(self):
-        by_name = {case["name"]: case for case in FIXTURE["cases"]}
-        self.assertEqual(by_name["avery_blocked"]["persona"], "blocked")
-        self.assertEqual(by_name["blake_champion"]["persona"], "champion")
-        self.assertIn("power_user", by_name["blake_champion"]["matched"])
+    def test_six_events_keep_the_five_newest(self):
+        rules = {
+            "personas": [
+                {
+                    "name": "busy",
+                    "priority": 1,
+                    "require_all": [
+                        {"count": {"action": "app_opened", "at_least": 1, "within_days": 14}}
+                    ],
+                }
+            ]
+        }
+        events = [
+            {"action": "app_opened", "occurred_at": f"2026-11-0{day}T15:00:00Z"}
+            for day in range(4, 10)
+        ]
+        result = judge("busy", events, {}, rules, now="2026-11-10T15:00:00Z")
+        self.assertEqual(len(result["reasons"]), 5)
+        self.assertEqual(result["reasons"][0]["occurred_at"], "2026-11-09T15:00:00.000000Z")
+        self.assertEqual(result["reasons"][-1]["occurred_at"], "2026-11-05T15:00:00.000000Z")
 
-    def test_lower_power_threshold_promotes_an_evaluator(self):
-        jordan = next(case for case in FIXTURE["cases"] if case["name"] == "evaluator")
-        policy = dict(FIXTURE["config"])
-        policy["power_user_min"] = 2
-        result = judge(
-            jordan["user_id"],
-            jordan["events"],
-            mapping=FIXTURE["mapping"],
-            policy=policy,
-            now=jordan["calculated_at"],
-        )
-        self.assertEqual(result["persona"], "power_user")
+    def test_bad_rules(self):
+        with self.assertRaises(PlgkitError):
+            normalize_rules({"personas": [{"name": "a", "require_all": []}]})
+        with self.assertRaises(PlgkitError):
+            normalize_rules(
+                {
+                    "groups": {"app_use": ["app_opened"]},
+                    "personas": [
+                        {"name": "a", "priority": 1},
+                        {"name": "a", "priority": 2},
+                    ],
+                }
+            )
+        with self.assertRaises(PlgkitError):
+            normalize_rules(
+                {
+                    "personas": [
+                        {
+                            "name": "a",
+                            "priority": 1,
+                            "require_all": [
+                                {"count": {"group": "missing", "at_least": 1, "within_days": 1}}
+                            ],
+                        }
+                    ]
+                }
+            )
+        with self.assertRaises(PlgkitError):
+            normalize_rules(
+                {
+                    "personas": [
+                        {
+                            "name": "a",
+                            "priority": 1,
+                            "require_all": [
+                                {
+                                    "count": {
+                                        "action": "app_opened",
+                                        "at_least": 3,
+                                        "at_most": 1,
+                                        "within_days": 1,
+                                    }
+                                }
+                            ],
+                        }
+                    ]
+                }
+            )
+        with self.assertRaises(PlgkitError):
+            normalize_rules({"mystery": 1})
 
 
 if __name__ == "__main__":

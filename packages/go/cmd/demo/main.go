@@ -45,17 +45,9 @@ func run(w io.Writer) error {
 		return err
 	}
 	examples := filepath.Join(root, "spec", "examples")
-	mapping, err := plgkit.LoadMapping(filepath.Join(examples, "mapping.yml"))
+	rules, err := plgkit.LoadRules(filepath.Join(examples, "personas.yml"))
 	if err != nil {
 		return err
-	}
-	policyInts, err := plgkit.LoadPolicy(filepath.Join(examples, "config.yml"))
-	if err != nil {
-		return err
-	}
-	policy := map[string]any{}
-	for key, value := range policyInts {
-		policy[key] = value
 	}
 	messages, err := personanudges.LoadMessages(filepath.Join(examples, "nudges", "messages"))
 	if err != nil {
@@ -81,7 +73,6 @@ func run(w io.Writer) error {
 	if err := nudges.Migrate(nudgeDB); err != nil {
 		return err
 	}
-	audiences := personanudges.Bind(db, fixture.CalculatedAt, mapping, policy)
 	for _, name := range show {
 		item := fixture.Cases[byName[name]]
 		for _, event := range item.Events {
@@ -95,7 +86,14 @@ func run(w io.Writer) error {
 				return fmt.Errorf("Could not store %s for %s.", action, item.UserID)
 			}
 		}
-		result, err := plgkit.Persona(item.UserID, db, fixture.CalculatedAt, mapping, policy)
+	}
+	if _, err := plgkit.Calculate(db, fixture.CalculatedAt, "", &rules); err != nil {
+		return err
+	}
+	audiences := personanudges.Bind(db)
+	for _, name := range show {
+		item := fixture.Cases[byName[name]]
+		result, err := plgkit.Persona(item.UserID, db)
 		if err != nil {
 			return err
 		}

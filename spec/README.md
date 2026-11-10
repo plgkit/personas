@@ -1,129 +1,121 @@
 # Persona contract
 
-Watch what someone does. Sort each action into one category. Stick on the first label that fits.
+You name the personas. The engine stores events and traits, then a calculate command writes one winner per person.
 
 Python, TypeScript, and Go implement this. They judge [the same cases](fixtures/cases.json).
 
-## Track
+## Files
+
+```
+your-app/plgkit/personas/personas.yml
+your-app/plgkit/personas/config.yml
+```
+
+`personas.yml` is the only place persona names exist. A missing file means nobody matches.
+
+`config.yml` has one key.
+
+| Key | Default | Meaning |
+|---|---|---|
+| `database_url_env` | `PLGKIT_DATABASE_URL` | Name of the variable that holds the database address |
+
+The address stays out of the file. A `postgres://` or `postgresql://` address uses Postgres. When the variable is unset, the package uses `plgkit_events.sqlite` in the current directory. Personas writes its own tables, so it can share that file with nudges.
+
+Unknown config keys are an error.
+
+## Track and identify
 
 `track(user_id, action, metadata)`
 
 | Field | Required | Meaning |
 |---|---|---|
 | `user_id` | yes | Opaque string |
-| `action` | yes | Your product's verb, such as `created_doc` |
+| `action` | yes | Your product's verb, such as `app_opened` |
 | `metadata.occurred_at` | no | When it happened. Receipt time is used when this is missing |
 | `metadata.event_id` | no | The same user and id is stored once. The first call wins |
 
-`occurred_at` is ISO-8601 with a timezone, such as `2026-11-09T15:00:00Z` or an offset. A timestamp with no timezone is rejected. Stored times look like `2026-11-09T15:00:00.000000Z`.
+`occurred_at` is ISO-8601 with a timezone, such as `2026-11-09T15:00:00Z`. A timestamp with no timezone is rejected. Stored times look like `2026-11-09T15:00:00.000000Z`.
 
 Other metadata is stored as JSON and is not copied into reasons.
 
-An action missing from the mapping is stored. It does not move the label.
-
 `track` returns true when the row is new, and false when `event_id` was already stored.
 
-## Files in your app
+`identify(user_id, traits)` stores the latest string for each key. Traits have no history. `{"role": "member"}` is valid. An empty object or a non-string value is an error.
 
-```
-your-app/plgkit/personas/config.yml
-your-app/plgkit/personas/mapping.yml
-```
+## Criteria
 
-`mapping.yml` is flat. One action, one category.
+Each persona has `name`, `priority`, and any of `require_all`, `require_one_of`, and `exclude`.
 
-| Your action | Category |
+| Key | Passes when |
 |---|---|
-| `created_doc` | `core_action` |
-| `sent_invite` | `invite_sent` |
-| `connected_slack` | `setup_step` |
+| `require_all` | Every condition is true. Omitted or empty passes |
+| `require_one_of` | At least one condition is true. Omitted passes. Present and empty fails |
+| `exclude` | No condition is true. Omitted or empty excludes nobody |
 
-The category set is closed: `core_action`, `invite_sent`, `setup_step`.
+Omitting all three matches everyone. When nothing matches, the stored persona is an empty string.
 
-The category is resolved when `persona()` runs. Editing the mapping recomputes history.
+A condition is a `count` or a `trait`. Lists do not nest.
 
-`config.yml` holds the policy numbers. Omitted keys use these defaults.
-
-| Key | Default |
+| Count field | Meaning |
 |---|---|
-| `lookback_days` | 14 |
-| `silence_days` | 7 |
-| `champion_min` | 1 |
-| `power_user_min` | 8 |
-| `implementer_min` | 2 |
-| `database_url_env` | `PLGKIT_DATABASE_URL` |
+| `action`, `actions`, or `group` | Exactly one of these. `group` names a list under `groups` |
+| `at_least` | Required integer of 0 or more |
+| `at_most` | Optional integer, at least `at_least` |
+| `within_days` | Required integer of 1 or more |
 
-`silence_days` has to be smaller than `lookback_days`. Every number is an integer of 1 or more.
+A day is 24 hours. An event counts when `now - within_days * 24h <= occurred_at <= now`. The exact boundary counts. A later event is ignored.
 
-`database_url_env` is the name of the variable that holds the database address. The address stays out of the file. A `postgres://` or `postgresql://` address uses Postgres. When the variable is unset, the package uses `plgkit_events.sqlite` in the current directory. That is the same default file nudges uses. Personas writes `plgkit_persona_events`, so both packages can share one database.
+A trait condition is `key` and `equals`, both strings. A missing trait does not equal that value, so an `exclude` of `role: billing_admin` keeps someone who has no role.
 
-`plgkit-personas migrate` creates the table. Run it again after an upgrade. It applies new numbered files only.
+`priority` is a required integer. Lower wins. The same number uses the earlier persona in the file.
 
-## Ask
+## Calculate
 
-`persona(user_id)` returns one object.
+`plgkit-personas calculate` judges every user who has events or traits and stores one row.
+
+```bash
+plgkit-personas calculate
+plgkit-personas calculate --user ada
+plgkit-personas calculate --now 2026-11-10T15:00:00Z
+```
+
+The summary line is `Calculated N users. M assigned. U unmatched.`
+
+There is no daemon. The app's scheduler runs the command. Node and Go expose the same command.
+
+`plgkit-personas migrate` creates the tables. Run it again after an upgrade. It applies new numbered files only.
+
+## Read
+
+`persona(user_id)` reads the stored row. It does not judge.
 
 | Field | Meaning |
 |---|---|
 | `user_id` | The id you asked about |
-| `persona` | The winning label |
-| `reasons` | Up to 5 events that support the winner, newest first |
-| `counts` | Mapped events inside the lookback: `core_action`, `invite_sent`, `setup_step` |
-| `matched` | Every label whose rule is true, in the order below |
-| `calculated_at` | When we judged, UTC |
+| `persona` | The stored winner, or `""` when nobody matched |
+| `matched` | Every name whose criteria were true, best priority first |
+| `reasons` | Up to 5 reasons for the winner |
+| `calculated_at` | When calculate ran, UTC, or `""` before the first row |
 
-A reason is `action`, `category`, and `occurred_at`.
+Before the first calculate, every field except `user_id` is empty. A missing table raises an error that mentions migrate.
 
-Pass `now` to pin `calculated_at`. The same events can change label when the clock moves.
+`persona_is(user_id, name)` is true only when the stored winner equals `name`. An empty name is an error. An empty stored persona is not a match.
 
-## Who wins
+Reasons come from true `require_all` and true `require_one_of` conditions. Exclude conditions are not reasons. Events come first, newest first, then a later action name, then a later input. Trait reasons follow, in condition order. The same event is cited once. The cap is 5.
 
-Only mapped events inside the lookback are counted.
-
-| Boundary | What happens |
+| Kind | Fields |
 |---|---|
-| Exactly `lookback_days` old | Counted |
-| Older than the lookback | Ignored |
-| After `calculated_at` | Ignored |
-| Newest mapped event is exactly `silence_days` old | Quiet |
-| Newer than that | Active |
+| `event` | `action`, `occurred_at` |
+| `trait` | `key`, `equals` |
 
-First row that matches wins.
+## Sample
 
-| Order | Label | Rule |
+Judged at `2026-11-10T15:00:00.000000Z` with [spec/examples/personas.yml](examples/personas.yml).
+
+| Person | History | Winner |
 |---|---|---|
-| 1 | `champion` | `invite_sent` >= `champion_min` |
-| 2 | `power_user` | `core_action` >= `power_user_min` |
-| 3 | `blocked` | At least one `setup_step` or `core_action`, and quiet |
-| 4 | `implementer` | `setup_step` >= `implementer_min` |
-| 5 | `evaluator` | Any mapped event in the window |
-| 6 | `unknown` | No mapped event in the window |
-
-Reasons that support each winner:
-
-| Winner | Events cited |
-|---|---|
-| `champion` | `invite_sent` |
-| `power_user` | `core_action` |
-| `blocked` | Any mapped event |
-| `implementer` | `setup_step` |
-| `evaluator` | Any mapped event |
-| `unknown` | None |
-
-Ties on the same timestamp use the action name, then the order the events were given. Newest first, then a later name, then a later event.
-
-## Two users
-
-Judged at `2026-11-10T15:00:00Z`.
-
-| Person | History | Label | Nudge in the demo |
-|---|---|---|---|
-| Avery | 3 setup steps, newest 9 days ago | `blocked` | Want help with the step you stopped on? |
-| Blake | 10 core actions in the last week, plus 1 invite yesterday | `champion` | Bring in the person you invited. |
-
-The package does not choose nudge copy. The [demo](examples/demo) does.
-
-## Sample result
+| Avery | 3 setup steps, newest 9 days ago | `blocked` |
+| Blake | docs plus one invite on Nov 9 | `champion` |
 
 Avery:
 
@@ -131,27 +123,14 @@ Avery:
 {
   "user_id": "avery",
   "persona": "blocked",
+  "matched": ["blocked"],
   "reasons": [
-    {
-      "action": "picked_template",
-      "category": "setup_step",
-      "occurred_at": "2026-11-01T15:00:00.000000Z"
-    },
-    {
-      "action": "created_workspace",
-      "category": "setup_step",
-      "occurred_at": "2026-10-31T15:00:00.000000Z"
-    },
-    {
-      "action": "connected_slack",
-      "category": "setup_step",
-      "occurred_at": "2026-10-30T15:00:00.000000Z"
-    }
+    {"kind": "event", "action": "picked_template", "occurred_at": "2026-11-01T15:00:00.000000Z"},
+    {"kind": "event", "action": "created_workspace", "occurred_at": "2026-10-31T15:00:00.000000Z"},
+    {"kind": "event", "action": "connected_slack", "occurred_at": "2026-10-30T15:00:00.000000Z"}
   ],
-  "counts": {"core_action": 0, "invite_sent": 0, "setup_step": 3},
-  "matched": ["blocked", "implementer", "evaluator"],
   "calculated_at": "2026-11-10T15:00:00.000000Z"
 }
 ```
 
-The full reason list and the rest of the cases live in [fixtures/cases.json](fixtures/cases.json).
+The rest of the cases live in [fixtures/cases.json](fixtures/cases.json). The [demo](examples/demo) prints a nudge line for Avery and Blake. The package does not choose that copy.

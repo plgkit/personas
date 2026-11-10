@@ -6,7 +6,7 @@ import { pathToFileURL, fileURLToPath } from "node:url";
 
 import { bind } from "../../../spec/examples/nudges/audiences.ts";
 import { loadMessages } from "../../../spec/examples/nudges/messages.ts";
-import { connect, loadMapping, loadPolicy, migrate, persona, track } from "./index.ts";
+import { calculate, connect, loadRules, migrate, persona, track } from "./index.ts";
 
 const NUDGES_SHA = "db82c8caba8309266ef0b8cd39d98d9fb4f89e35";
 const SHOW = ["avery_blocked", "blake_champion"];
@@ -14,24 +14,16 @@ const SHOW = ["avery_blocked", "blake_champion"];
 const repo = repoRoot();
 const fixture = JSON.parse(fs.readFileSync(path.join(repo, "spec", "fixtures", "cases.json"), "utf8"));
 const examples = path.join(repo, "spec", "examples");
-const mapping = loadMapping(path.join(examples, "mapping.yml"));
-const policy = loadPolicy(path.join(examples, "config.yml"));
+const rules = loadRules(path.join(examples, "personas.yml"));
 const now = fixture.calculated_at as string;
 const byName = new Map(fixture.cases.map((item: { name: string }) => [item.name, item]));
 const messages = loadMessages(path.join(examples, "nudges", "messages"));
 const db = connect("sqlite:///:memory:");
 migrate(db);
 
-const nudges = await import(pathToFileURL(path.join(nudgesRoot(), "packages", "node", "src", "decide.ts")).href);
-const nudgeStore = await import(pathToFileURL(path.join(nudgesRoot(), "packages", "node", "src", "store.ts")).href);
-const nudgeDb = nudgeStore.connect("sqlite:///:memory:");
-nudgeStore.migrate(nudgeDb);
-const audiences = bind({ db, now, mapping, policy });
-
 for (const name of SHOW) {
   const caseItem = byName.get(name) as {
     user_id: string;
-    persona: string;
     events: { action: string; occurred_at: string }[];
   };
   for (const event of caseItem.events) {
@@ -41,7 +33,18 @@ for (const name of SHOW) {
       process.exit(1);
     }
   }
-  const result = persona(caseItem.user_id, { db, now, mapping, config: policy });
+}
+calculate({ db, now, rules });
+
+const nudges = await import(pathToFileURL(path.join(nudgesRoot(), "packages", "node", "src", "decide.ts")).href);
+const nudgeStore = await import(pathToFileURL(path.join(nudgesRoot(), "packages", "node", "src", "store.ts")).href);
+const nudgeDb = nudgeStore.connect("sqlite:///:memory:");
+nudgeStore.migrate(nudgeDb);
+const audiences = bind({ db });
+
+for (const name of SHOW) {
+  const caseItem = byName.get(name) as { user_id: string; persona: string };
+  const result = persona(caseItem.user_id, { db });
   if (result.persona !== caseItem.persona) {
     console.error(`${caseItem.user_id} is ${result.persona}, expected ${caseItem.persona}.`);
     process.exit(1);
