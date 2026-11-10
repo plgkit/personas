@@ -6,6 +6,8 @@ From the repo root:
 
 ```bash
 spec/examples/demo/script/demo
+spec/examples/demo/script/demo --backend node
+spec/examples/demo/script/demo --backend go
 ```
 
 | Person | Label | Line |

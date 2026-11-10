@@ -2,6 +2,7 @@
 """Print a nudge for Avery and a nudge for Blake."""
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -26,6 +27,9 @@ SHOW = ("avery_blocked", "blake_champion")
 
 
 def main():
+    backend = _backend(sys.argv[1:])
+    if backend != "python":
+        _exec_backend(backend)
     fixture = json.loads((REPO / "spec" / "fixtures" / "cases.json").read_text(encoding="utf-8"))
     examples = REPO / "spec" / "examples"
     mapping = load_mapping(examples / "mapping.yml")
@@ -53,6 +57,30 @@ def main():
             )
         line = LINES[result["persona"]]
         print(f"{case['user_id'].capitalize():<8} {result['persona']:<12} {line}")
+
+
+def _backend(args):
+    if not args:
+        return "python"
+    if len(args) == 2 and args[0] == "--backend" and args[1] in ("python", "node", "go"):
+        return args[1]
+    raise SystemExit("Usage: demo [--backend python|node|go]")
+
+
+def _exec_backend(backend):
+    os.chdir(REPO)
+    if backend == "node":
+        script = REPO / "packages" / "node" / "src" / "demo.ts"
+        os.execvp(
+            "node",
+            [
+                "node",
+                "--disable-warning=ExperimentalWarning",
+                "--experimental-strip-types",
+                str(script),
+            ],
+        )
+    os.execvp("go", ["go", "run", "./packages/go/cmd/demo"])
 
 
 if __name__ == "__main__":

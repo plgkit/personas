@@ -3,7 +3,7 @@
 Read this before changing this repo.
 
 - The contract is [spec/README.md](spec/README.md). Change behavior only when the task asks for it.
-- Python is the reference package. TypeScript and Go must match [spec/fixtures/cases.json](spec/fixtures/cases.json).
+- Python is the reference package. TypeScript (`packages/node`) and Go (`packages/go`) must match [spec/fixtures/cases.json](spec/fixtures/cases.json).
 - Nudge copy stays in the demo. The package returns a persona and reasons.
 - Names: Python `plgkit_personas`, npm `@plgkit/personas`, Go `github.com/plgkit/personas/packages/go`, CLI `plgkit-personas`.
 - Personas uses the table `plgkit_persona_events` and its own migrations table, so it can share a database with nudges.

@@ -11,10 +11,17 @@ your-app/plgkit/personas/mapping.yml
 
 `mapping.yml` turns your verbs into `core_action`, `invite_sent`, and `setup_step`.
 
-Then:
+Then create the table:
 
 ```bash
 plgkit-personas migrate
+```
+
+From this repo, the other two packages are:
+
+```bash
+node --experimental-strip-types packages/node/src/cli.ts migrate
+go run ./packages/go/cmd/plgkit-personas migrate
 ```
 
 ```python

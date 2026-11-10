@@ -2,7 +2,7 @@
 
 Watch what someone does. Sort each action into one category. Stick on the first label that fits.
 
-Python implements this. TypeScript and Go will judge [the same cases](fixtures/cases.json).
+Python, TypeScript, and Go implement this. They judge [the same cases](fixtures/cases.json).
 
 ## Track
 

@@ -1,0 +1,175 @@
+package plgkit
+
+import (
+	"database/sql"
+	"path/filepath"
+	"testing"
+)
+
+func TestRoundTrip(t *testing.T) {
+	fixture := loadFixture(t)
+	for _, item := range fixture.Cases {
+		db := memoryDB(t)
+		for _, event := range item.Events {
+			action, _ := event["action"].(string)
+			occurred, _ := event["occurred_at"].(string)
+			stored, err := Track(item.UserID, action, map[string]any{"occurred_at": occurred}, db, item.CalculatedAt)
+			if err != nil || !stored {
+				t.Fatalf("%s track %v %v", item.Name, stored, err)
+			}
+		}
+		result, err := Persona(item.UserID, db, item.CalculatedAt, fixture.Mapping, fixture.Config)
+		if err != nil {
+			t.Fatal(item.Name, err)
+		}
+		if result.Persona != item.Persona || !sameReasons(result.Reasons, item.Reasons) || !samePolicy(result.Counts, item.Counts) {
+			t.Fatalf("%s got %s %#v %#v", item.Name, result.Persona, result.Counts, result.Reasons)
+		}
+	}
+}
+
+func TestDuplicateEventID(t *testing.T) {
+	db := memoryDB(t)
+	now := "2026-11-10T15:00:00Z"
+	stored, err := Track("jordan", "created_doc", map[string]any{
+		"occurred_at": "2026-11-09T15:00:00Z",
+		"event_id":    "once",
+		"page":        "home",
+	}, db, now)
+	if err != nil || !stored {
+		t.Fatal(stored, err)
+	}
+	stored, err = Track("jordan", "edited_doc", map[string]any{
+		"occurred_at": "2026-11-09T16:00:00Z",
+		"event_id":    "once",
+		"page":        "away",
+	}, db, now)
+	if err != nil || stored {
+		t.Fatal(stored, err)
+	}
+	mapping := map[string]string{"created_doc": "core_action", "edited_doc": "core_action"}
+	result, err := Persona("jordan", db, now, mapping, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Counts["core_action"] != 1 || result.Reasons[0].Action != "created_doc" {
+		t.Fatalf("%#v", result)
+	}
+	if result.Reasons[0].OccurredAt != "2026-11-09T15:00:00.000000Z" {
+		t.Fatal(result.Reasons[0].OccurredAt)
+	}
+	var metadata string
+	if err := db.QueryRow("SELECT metadata FROM plgkit_persona_events WHERE user_id = ?", "jordan").Scan(&metadata); err != nil {
+		t.Fatal(err)
+	}
+	if metadata != `{"page":"home"}` {
+		t.Fatal(metadata)
+	}
+}
+
+func TestBadCallsStoreNothing(t *testing.T) {
+	db := memoryDB(t)
+	now := "2026-11-10T15:00:00Z"
+	if _, err := Track("", "created_doc", nil, db, now); err == nil {
+		t.Fatal("empty user")
+	}
+	if _, err := Track("jordan", "created_doc", []any{"nope"}, db, now); err == nil {
+		t.Fatal("bad metadata")
+	}
+	if _, err := Track("jordan", "created_doc", map[string]any{"occurred_at": "yesterday"}, db, now); err == nil {
+		t.Fatal("bad time")
+	}
+	var count int
+	if err := db.QueryRow("SELECT COUNT(*) FROM plgkit_persona_events").Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatal(count)
+	}
+}
+
+func TestPersonaBeforeMigrate(t *testing.T) {
+	db, err := Connect("sqlite:///:memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	_, err = Persona("jordan", db, "2026-11-10T15:00:00Z", map[string]string{}, nil)
+	if err == nil || !contains(err.Error(), "migrate") {
+		t.Fatal(err)
+	}
+}
+
+func TestCLIMigrate(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("PLGKIT_DATABASE_URL", "sqlite:///"+filepath.ToSlash(filepath.Join(dir, "events.sqlite")))
+	t.Setenv("PLGKIT_PERSONA_MIGRATIONS_DIR", "")
+	if code := RunCLI(nil); code != 1 {
+		t.Fatal(code)
+	}
+	if code := RunCLI([]string{"migrate"}); code != 0 {
+		t.Fatal(code)
+	}
+	if code := RunCLI([]string{"migrate"}); code != 0 {
+		t.Fatal(code)
+	}
+	db, err := sql.Open("sqlite", filepath.Join(dir, "events.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var name string
+	if err := db.QueryRow("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'plgkit_persona_events'").Scan(&name); err != nil {
+		t.Fatal(err)
+	}
+	if name != "plgkit_persona_events" {
+		t.Fatal(name)
+	}
+}
+
+func TestDemo(t *testing.T) {
+	var buf stringsBuilder
+	if err := PrintDemo(&buf); err != nil {
+		t.Fatal(err)
+	}
+	want := "Avery    blocked      Want help with the step you stopped on?\n" +
+		"Blake    champion     Bring in the person you invited.\n"
+	if buf.String() != want {
+		t.Fatalf("%q", buf.String())
+	}
+}
+
+func memoryDB(t *testing.T) *sql.DB {
+	t.Helper()
+	db, err := Connect("sqlite:///:memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	if err := Migrate(db); err != nil {
+		t.Fatal(err)
+	}
+	return db
+}
+
+func contains(text, part string) bool {
+	return len(text) >= len(part) && (text == part || len(part) == 0 || (len(text) > 0 && (indexOf(text, part) >= 0)))
+}
+
+func indexOf(text, part string) int {
+	for i := 0; i+len(part) <= len(text); i++ {
+		if text[i:i+len(part)] == part {
+			return i
+		}
+	}
+	return -1
+}
+
+type stringsBuilder struct{ text string }
+
+func (b *stringsBuilder) Write(p []byte) (int, error) {
+	b.text += string(p)
+	return len(p), nil
+}
+
+func (b *stringsBuilder) String() string { return b.text }
